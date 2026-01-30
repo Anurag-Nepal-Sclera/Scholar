@@ -1,8 +1,49 @@
-version: '3.8'
+##version: '3.8'
+#
+#services:
+#  postgres:
+#    image: postgres:14
+#    container_name: scholar-postgres
+#    environment:
+#      POSTGRES_DB: scholar_db
+#      POSTGRES_USER: postgres
+#      POSTGRES_PASSWORD: postgres
+#    ports:
+#      - "5432:5432"
+#    volumes:
+#      - postgres_data:/var/lib/postgresql/data
+#    healthcheck:
+#      test: ["CMD-SHELL", "pg_isready -U postgres"]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 5
+#
+#  scholar-backend:
+#    build: .
+#    container_name: scholar-backend
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
+#    environment:
+#      SPRING_PROFILES_ACTIVE: prod
+#      DATABASE_URL: jdbc:postgresql://postgres:5432/scholar_db
+#      DB_USERNAME: postgres
+#      DB_PASSWORD: postgres
+#      ENCRYPTION_KEY: your-32-character-secret-key!
+#      CV_STORAGE_PATH: /app/storage/cvs
+#    ports:
+#      - "9090:9090"
+#    volumes:
+#      - cv_storage:/app/storage/cvs
+#    restart: unless-stopped
+#
+#volumes:
+#  postgres_data:
+#  cv_storage:
 
 services:
   postgres:
-    image: postgres:14
+    image: postgres:15-alpine
     container_name: scholar-postgres
     environment:
       POSTGRES_DB: scholar_db
@@ -13,7 +54,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d scholar_db"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -26,15 +67,18 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      DATABASE_URL: jdbc:postgresql://postgres:5432/scholar_db
-      DB_USERNAME: postgres
-      DB_PASSWORD: postgres
-      ENCRYPTION_KEY: your-32-character-secret-key!
-      CV_STORAGE_PATH: ./storage/cvs
+      # Database configuration
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/scholar_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      # Storage configuration - must match the volume mount path
+      SCHOLAR_STORAGE_BASE_PATH: /app/storage/cvs
+      # Other configuration
+      ENCRYPTION_KEY: your-32-character-secret-key!!
     ports:
       - "9090:9090"
     volumes:
-      - cv_storage:./storage/cvs
+      - cv_storage:/app/storage/cvs
     restart: unless-stopped
 
 volumes:
