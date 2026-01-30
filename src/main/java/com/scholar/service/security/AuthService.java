@@ -43,8 +43,11 @@ public class AuthService {
                 .build();
         
         var savedUser = repository.save(user);
+        var userDetails = new ScholarUserDetails(savedUser);
+        var jwtToken = jwtService.generateToken(userDetails);
         
         return AuthenticationResponse.builder()
+                .token(jwtToken)
                 .userId(savedUser.getId())
                 .email(savedUser.getEmail())
                 .firstName(savedUser.getFirstName())

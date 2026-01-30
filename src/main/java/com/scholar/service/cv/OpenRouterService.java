@@ -41,7 +41,7 @@ public class OpenRouterService {
      */
     public List<String> extractKeywords(String text) {
         log.info("Extracting comprehensive technical keywords using AI for text length: {}", text.length());
-        
+
         String prompt = "You are an expert academic research profiler. Analyze the following CV text and extract a comprehensive list of exactly 200 technical keywords and keyphrases. " +
                 "Focus strictly on: \n" +
                 "1. Research Areas & Sub-domains (e.g., Computer Vision, Quantum Mechanics)\n" +
@@ -59,11 +59,11 @@ public class OpenRouterService {
         try {
             String response = callAi(prompt);
             if (response == null) return List.of();
-            
+
             // Clean up common AI artifacts (like "Here are the keywords:" or markdown)
             String cleanResponse = response.replaceAll("(?i)here are.*:", "")
-                                         .replaceAll("```", "")
-                                         .replaceAll("\n", ",");
+                    .replaceAll("```", "")
+                    .replaceAll("\n", ",");
 
             String[] parts = cleanResponse.split(",");
             List<String> keywords = new ArrayList<>();
@@ -91,7 +91,7 @@ public class OpenRouterService {
      */
     public String generateOutreachEmail(String studentKeywords, String professorName, String university, String matchedKeywords) {
         log.info("Generating personalized outreach email for professor: {}", professorName);
-        
+
         String prompt = "You are an assistant for a prospective PhD student. " +
                 "Generate a professional, concise, and highly personalized outreach email to Prof. " + professorName + " at " + university + ". " +
                 "The student's research interests include: " + studentKeywords + ". " +
