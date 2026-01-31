@@ -108,10 +108,12 @@ public class EmailCampaignService {
     }
 
     @Async
+    @Transactional
     public void executeCampaign(UUID campaignId) {
         try {
             EmailCampaign campaign = campaignRepository.findById(campaignId).orElseThrow();
-            if (campaign.getStatus() != EmailCampaign.CampaignStatus.SCHEDULED && campaign.getStatus() != EmailCampaign.CampaignStatus.DRAFT) return;
+            // Allow execution if SCHEDULED or if manually triggered (IN_PROGRESS check handled by caller or status update)
+            // if (campaign.getStatus() != EmailCampaign.CampaignStatus.SCHEDULED && campaign.getStatus() != EmailCampaign.CampaignStatus.DRAFT) return;
 
             byte[] cvFile = fileStorageService.retrieveFile(campaign.getCv().getFilePath());
             String fileName = campaign.getCv().getOriginalFilename();

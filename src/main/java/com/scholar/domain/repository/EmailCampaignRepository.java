@@ -31,4 +31,8 @@ public interface EmailCampaignRepository extends JpaRepository<EmailCampaign, UU
 
     @Query("SELECT COUNT(c) FROM EmailCampaign c WHERE c.tenant.id = :tenantId")
     long countByTenantId(@Param("tenantId") UUID tenantId);
+
+    void deleteByCvId(UUID cvId);
+
+    List<EmailCampaign> findAllByCvId(UUID cvId);
 }

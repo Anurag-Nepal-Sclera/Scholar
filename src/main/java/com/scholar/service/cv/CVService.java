@@ -2,15 +2,17 @@ package com.scholar.service.cv;
 
 import com.scholar.domain.entity.CV;
 import com.scholar.domain.entity.CvKeyword;
+import com.scholar.domain.entity.EmailCampaign;
 import com.scholar.domain.entity.Tenant;
 import com.scholar.domain.entity.UserProfile;
 import com.scholar.domain.repository.CVRepository;
 import com.scholar.domain.repository.CvKeywordRepository;
+import com.scholar.domain.repository.EmailCampaignRepository;
 import com.scholar.domain.repository.MatchResultRepository;
+import com.scholar.service.matching.MatchingService;
 import com.scholar.service.storage.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import com.scholar.service.matching.MatchingService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
@@ -28,7 +30,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Service for managing CV uploads, parsing, and keyword extraction.
@@ -41,6 +42,7 @@ public class CVService {
     private final CVRepository cvRepository;
     private final CvKeywordRepository cvKeywordRepository;
     private final MatchResultRepository matchResultRepository;
+    private final EmailCampaignRepository emailCampaignRepository;
     private final FileStorageService fileStorageService;
     private final DocumentTextExtractor textExtractor;
     private final OpenRouterService openRouterService;
@@ -50,6 +52,7 @@ public class CVService {
     public CVService(CVRepository cvRepository, 
                      CvKeywordRepository cvKeywordRepository,
                      MatchResultRepository matchResultRepository,
+                     EmailCampaignRepository emailCampaignRepository,
                      FileStorageService fileStorageService,
                      DocumentTextExtractor textExtractor,
                      OpenRouterService openRouterService,
@@ -58,6 +61,7 @@ public class CVService {
         this.cvRepository = cvRepository;
         this.cvKeywordRepository = cvKeywordRepository;
         this.matchResultRepository = matchResultRepository;
+        this.emailCampaignRepository = emailCampaignRepository;
         this.fileStorageService = fileStorageService;
         this.textExtractor = textExtractor;
         this.openRouterService = openRouterService;
@@ -296,9 +300,18 @@ public class CVService {
         }
 
         // Manually delete related data since we removed cascade
-        log.debug("Deleting keywords and match results for CV ID: {}", cvId);
+        log.debug("Deleting keywords, match results and campaigns for CV ID: {}", cvId);
+        
         cvKeywordRepository.deleteByCvId(cvId);
         matchResultRepository.deleteByCvId(cvId);
+        
+        // Find and delete campaigns (cascading to email logs)
+        List<EmailCampaign> campaigns = emailCampaignRepository.findAllByCvId(cvId);
+        if (!campaigns.isEmpty()) {
+            log.debug("Deleting {} campaigns associated with CV", campaigns.size());
+            emailCampaignRepository.deleteAll(campaigns);
+            emailCampaignRepository.flush(); // Ensure deletion happens before CV delete
+        }
 
         cvRepository.delete(cv);
         log.info("CV ID: {} successfully deleted from database", cvId);
