@@ -37,7 +37,7 @@ bin/
 .DS_Store
 
 # Storage
-storage/
+#storage/
 
 # Environment variables
 .env

@@ -131,9 +131,12 @@ public class CVService {
     @Transactional
     public void parseAndExtractKeywords(UUID cvId) {
         log.info("Starting asynchronous parsing for CV ID: {}", cvId);
+        // Add a small sleep to ensure DB transaction from upload is visible
+        try { Thread.sleep(500); } catch (InterruptedException ignored) {}
+        
         try {
             CV cv = cvRepository.findById(cvId)
-                .orElseThrow(() -> new IllegalArgumentException("CV not found: " + cvId));
+                .orElseThrow(() -> new IllegalArgumentException("CV not found in database: " + cvId));
 
             log.debug("CV details retrieved: {}, MIME type: {}", cv.getOriginalFilename(), cv.getMimeType());
 
@@ -151,8 +154,13 @@ public class CVService {
             log.debug("Text extraction completed. Extracted length: {} characters", extractedText.length());
 
             // Extract keywords using AI (Comprehensive technical extraction)
-            log.debug("Extracting ~200 technical keywords from text using AI...");
+            log.debug("Extracting technical keywords from text using AI...");
             List<String> aiKeywordsRaw = openRouterService.extractKeywords(extractedText);
+            
+            if (aiKeywordsRaw.isEmpty()) {
+                log.warn("AI extraction returned no keywords. Attempting fallback extraction.");
+                aiKeywordsRaw = fallbackExtraction(extractedText);
+            }
             
             // Deduplicate keywords while preserving rank
             List<String> aiKeywords = new ArrayList<>(new java.util.LinkedHashSet<>(aiKeywordsRaw));
@@ -191,13 +199,23 @@ public class CVService {
             // Update CV status
             cv.setParsingStatus(CV.ParsingStatus.COMPLETED);
             cv.setParsedAt(LocalDateTime.now());
-            cvRepository.save(cv);
+            cvRepository.saveAndFlush(cv);
 
-            log.info("CV parsing completed successfully: {}. Total keywords saved: {}", cvId, keywords.size());
+            log.info("CV parsing completed successfully: {}. Total keywords saved: {}. Proceeding to matching...", cvId, keywords.size());
 
-            // Automatically trigger match computation after successful parsing
-            log.info("Triggering automatic match computation for CV: {}", cvId);
-            matchingService.computeMatches(cvId, cv.getTenant().getId());
+            // Automatically trigger match computation after successful parsing transaction commits
+            final UUID tenantId = cv.getTenant().getId();
+            if (TransactionSynchronizationManager.isActualTransactionActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        matchingService.computeMatches(cvId, tenantId);
+                        log.info("Automatic match computation triggered for CV: {} after transaction commit", cvId);
+                    }
+                });
+            } else {
+                matchingService.computeMatches(cvId, tenantId);
+            }
         } catch (Exception e) {
             log.error("CV parsing failed for ID: {}. Error: {}", cvId, e.getMessage(), e);
             cvRepository.findById(cvId).ifPresent(cv -> {
@@ -320,5 +338,33 @@ public class CVService {
         if (file.getSize() > maxSizeBytes) {
             throw new IllegalArgumentException("File size exceeds maximum allowed: " + maxSizeMb + "MB");
         }
+    }
+
+    /**
+     * Fallback keyword extraction using simple regex/string matching.
+     */
+    private List<String> fallbackExtraction(String text) {
+        log.info("Running fallback keyword extraction");
+        List<String> keywords = new ArrayList<>();
+        if (text == null || text.isBlank()) return keywords;
+
+        // Common technical terms that might be in a CV
+        String[] commonTerms = {
+            "Java", "Python", "C++", "Spring Boot", "Machine Learning", "Data Science",
+            "Artificial Intelligence", "Neural Networks", "Deep Learning", "SQL", "NoSQL",
+            "Docker", "Kubernetes", "Cloud Computing", "AWS", "Azure", "React", "Angular",
+            "Node.js", "Microservices", "REST API", "Git", "Agile", "Scrum", "Research",
+            "Algorithms", "Data Structures", "Big Data", "Spark", "Hadoop"
+        };
+
+        String lowerText = text.toLowerCase();
+        for (String term : commonTerms) {
+            if (lowerText.contains(term.toLowerCase())) {
+                keywords.add(term);
+            }
+        }
+        
+        log.info("Fallback extraction found {} keywords", keywords.size());
+        return keywords;
     }
 }

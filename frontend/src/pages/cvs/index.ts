@@ -1,0 +1,1 @@
+export { CVsPage } from './CVsPage';

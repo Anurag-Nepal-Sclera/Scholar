@@ -75,6 +75,7 @@ services:
       SCHOLAR_STORAGE_BASE_PATH: /app/storage/cvs
       # Other configuration
       ENCRYPTION_KEY: your-32-character-secret-key!!
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
     ports:
       - "9090:9090"
     volumes:
