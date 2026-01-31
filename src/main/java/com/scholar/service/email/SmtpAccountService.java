@@ -7,6 +7,7 @@ import com.scholar.domain.repository.TenantRepository;
 import com.scholar.service.security.EncryptionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +24,7 @@ public class SmtpAccountService {
     private final SmtpAccountRepository smtpAccountRepository;
     private final TenantRepository tenantRepository;
     private final EncryptionService encryptionService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Creates or updates an SMTP account for a tenant.
@@ -74,6 +76,9 @@ public class SmtpAccountService {
 
         SmtpAccount saved = smtpAccountRepository.save(smtpAccount);
         log.info("SMTP account saved for tenant: {}", tenantId);
+        
+        eventPublisher.publishEvent(new SmtpAccountChangedEvent(this, saved.getId(), tenantId));
+        
         return saved;
     }
 
@@ -122,5 +127,7 @@ public class SmtpAccountService {
         smtpAccount.setStatus(SmtpAccount.SmtpAccountStatus.INACTIVE);
         smtpAccountRepository.save(smtpAccount);
         log.info("SMTP account deactivated for tenant: {}", tenantId);
+        
+        eventPublisher.publishEvent(new SmtpAccountChangedEvent(this, smtpAccount.getId(), tenantId));
     }
 }

@@ -14,8 +14,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Service for interacting with OpenRouter AI API.
@@ -104,6 +106,34 @@ public class OpenRouterService {
         } catch (Exception e) {
             log.error("AI email generation failed", e);
             return null;
+        }
+    }
+
+    /**
+     * Generates multiple personalized outreach email options using AI.
+     */
+    public List<String> generateEmailOptions(String studentKeywords, String professorName, String university, String matchedKeywords, int count) {
+        log.info("Generating {} personalized outreach email options for professor: {}", count, professorName);
+
+        String prompt = "You are an assistant for a prospective PhD student. " +
+                "Generate " + count + " distinct, professional, and highly personalized outreach email options to Prof. " + professorName + " at " + university + ". " +
+                "The student's research interests include: " + studentKeywords + ". " +
+                "The specific research alignment found with this professor is in: " + matchedKeywords + ". " +
+                "Each option should have a different approach or tone (e.g., focus on a specific paper, focus on a shared research interest, focus on future collaboration). " +
+                "The emails should be around 150-200 words. " +
+                "Separate each option with '---OPTION_SEPARATOR---'. Return only the email bodies.";
+
+        try {
+            String response = callAi(prompt);
+            if (response == null) return List.of();
+            
+            return Arrays.stream(response.split("---OPTION_SEPARATOR---"))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("AI email options generation failed", e);
+            return List.of();
         }
     }
 

@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -20,6 +21,7 @@ public class MatchResultResponse {
     private Integer totalCvKeywords;
     private Integer totalProfessorKeywords;
     private Integer totalMatchedKeywords;
+    private List<EmailOptionResponse> emailOptions;
 
     @Data
     @Builder

@@ -170,6 +170,24 @@ public class EmailCampaignController {
         }
     }
 
+    @PutMapping("/logs/{logId}/options/{optionId}/select")
+    @Operation(summary = "Select email option", description = "Select one of the AI-generated email options for a match")
+    public ResponseEntity<ApiResponse<String>> selectEmailOption(
+        @PathVariable UUID logId,
+        @PathVariable UUID optionId,
+        @RequestParam UUID tenantId
+    ) {
+        try {
+            securityUtils.validateTenantOwnership(tenantId);
+            campaignService.selectEmailOption(logId, optionId, tenantId);
+            return ResponseEntity.ok(ApiResponse.success("Email option selected successfully"));
+        } catch (Exception e) {
+            log.error("Failed to select email option", e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("Failed to select email option: " + e.getMessage()));
+        }
+    }
+
     private EmailCampaignResponse toResponse(EmailCampaign campaign) {
         return EmailCampaignResponse.builder()
             .id(campaign.getId())

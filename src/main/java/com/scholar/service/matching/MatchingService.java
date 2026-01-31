@@ -2,7 +2,6 @@ package com.scholar.service.matching;
 
 import com.scholar.domain.entity.*;
 import com.scholar.domain.repository.*;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import com.scholar.service.email.EmailCampaignService;
 import org.springframework.context.annotation.Lazy;
@@ -30,7 +29,6 @@ public class MatchingService {
     private final CVRepository cvRepository;
     private final CvKeywordRepository cvKeywordRepository;
     private final ProfessorRepository professorRepository;
-    private final ProfessorKeywordRepository professorKeywordRepository;
     private final MatchResultRepository matchResultRepository;
     private final EmailCampaignService emailCampaignService;
     private final MatchingService self;
@@ -38,14 +36,12 @@ public class MatchingService {
     public MatchingService(CVRepository cvRepository,
                            CvKeywordRepository cvKeywordRepository,
                            ProfessorRepository professorRepository,
-                           ProfessorKeywordRepository professorKeywordRepository,
                            MatchResultRepository matchResultRepository,
                            EmailCampaignService emailCampaignService,
                            @Lazy MatchingService self) {
         this.cvRepository = cvRepository;
         this.cvKeywordRepository = cvKeywordRepository;
         this.professorRepository = professorRepository;
-        this.professorKeywordRepository = professorKeywordRepository;
         this.matchResultRepository = matchResultRepository;
         this.emailCampaignService = emailCampaignService;
         this.self = self;
@@ -134,43 +130,35 @@ public class MatchingService {
      * Performs an update if existingMatch is provided, otherwise creates a new one.
      */
     private MatchResult computeSingleMatch(CV cv, Professor professor, Map<String, BigDecimal> cvKeywordMap, MatchResult existingMatch) {
-        List<ProfessorKeyword> professorKeywords = professorKeywordRepository.findByProfessorId(professor.getId());
+        String researchArea = professor.getResearchArea() != null ? professor.getResearchArea().toLowerCase() : "";
+        String department = professor.getDepartment() != null ? professor.getDepartment().toLowerCase() : "";
+        String combinedText = researchArea + " " + department;
 
-        if (professorKeywords.isEmpty()) {
+        if (combinedText.isBlank()) {
             return null;
         }
 
-        Map<String, BigDecimal> professorKeywordMap = professorKeywords.stream()
-                .collect(Collectors.toMap(
-                        ProfessorKeyword::getNormalizedKeyword,
-                        ProfessorKeyword::getWeight,
-                        (w1, w2) -> w1.max(w2)
-                ));
-
-        // Find intersecting keywords
-        Set<String> matchedKeywords = new HashSet<>(cvKeywordMap.keySet());
-        matchedKeywords.retainAll(professorKeywordMap.keySet());
-
-        if (matchedKeywords.isEmpty()) {
-            return null;
-        }
-
-        // Compute weighted score
+        Set<String> matchedKeywords = new HashSet<>();
         BigDecimal totalScore = BigDecimal.ZERO;
         BigDecimal maxPossibleScore = BigDecimal.ZERO;
 
-        for (String keyword : matchedKeywords) {
-            BigDecimal cvWeight = cvKeywordMap.get(keyword);
-            BigDecimal profWeight = professorKeywordMap.get(keyword);
+        // Count "professor keywords" by splitting research area (approximate for stats)
+        String[] profKeywords = researchArea.split("[,;\\s]+");
+        int profKeywordCount = (int) Arrays.stream(profKeywords).filter(s -> !s.isBlank()).distinct().count();
 
-            // Score = CV_weight * Professor_weight
-            BigDecimal keywordScore = cvWeight.multiply(profWeight);
-            totalScore = totalScore.add(keywordScore);
+        for (Map.Entry<String, BigDecimal> entry : cvKeywordMap.entrySet()) {
+            String keyword = entry.getKey();
+            BigDecimal weight = entry.getValue();
+            maxPossibleScore = maxPossibleScore.add(weight);
+
+            if (combinedText.contains(keyword)) {
+                matchedKeywords.add(keyword);
+                totalScore = totalScore.add(weight);
+            }
         }
 
-        // Calculate max possible score (all keywords matched with max weights)
-        for (BigDecimal weight : cvKeywordMap.values()) {
-            maxPossibleScore = maxPossibleScore.add(weight);
+        if (matchedKeywords.isEmpty()) {
+            return null;
         }
 
         // Normalize score to [0, 1]
@@ -178,19 +166,16 @@ public class MatchingService {
                 ? totalScore.divide(maxPossibleScore, 6, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
 
-        // Build matched keywords string (comma-separated)
         String matchedKeywordsStr = String.join(", ", matchedKeywords);
 
         if (existingMatch != null) {
-            // Update existing record
             existingMatch.setMatchScore(matchScore);
             existingMatch.setMatchedKeywords(matchedKeywordsStr);
             existingMatch.setTotalCvKeywords(cvKeywordMap.size());
-            existingMatch.setTotalProfessorKeywords(professorKeywordMap.size());
+            existingMatch.setTotalProfessorKeywords(profKeywordCount);
             existingMatch.setTotalMatchedKeywords(matchedKeywords.size());
             return existingMatch;
         } else {
-            // Create new record
             return MatchResult.builder()
                     .tenant(cv.getTenant())
                     .cv(cv)
@@ -198,7 +183,7 @@ public class MatchingService {
                     .matchScore(matchScore)
                     .matchedKeywords(matchedKeywordsStr)
                     .totalCvKeywords(cvKeywordMap.size())
-                    .totalProfessorKeywords(professorKeywordMap.size())
+                    .totalProfessorKeywords(profKeywordCount)
                     .totalMatchedKeywords(matchedKeywords.size())
                     .build();
         }
