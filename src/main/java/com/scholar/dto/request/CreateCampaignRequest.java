@@ -27,4 +27,6 @@ public class CreateCampaignRequest {
     @DecimalMin(value = "0.0", message = "Score must be between 0 and 1")
     @DecimalMax(value = "1.0", message = "Score must be between 0 and 1")
     private BigDecimal minMatchScore;
+
+    private java.util.List<UUID> matchIds;
 }

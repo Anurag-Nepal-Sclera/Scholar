@@ -50,7 +50,8 @@ public class EmailCampaignController {
                 request.getName(),
                 request.getSubject(),
                 request.getBodyTemplate(),
-                request.getMinMatchScore()
+                request.getMinMatchScore(),
+                request.getMatchIds()
             );
 
             EmailCampaignResponse response = toResponse(campaign);

@@ -82,6 +82,14 @@ public class EmailCampaignService {
      */
     @Transactional
     public EmailCampaign createCampaign(UUID tenantId, UUID cvId, String name, String subject, String bodyTemplate, BigDecimal minMatchScore) {
+        return createCampaign(tenantId, cvId, name, subject, bodyTemplate, minMatchScore, null);
+    }
+
+    /**
+     * Creates a new email campaign with optional specific matches.
+     */
+    @Transactional
+    public EmailCampaign createCampaign(UUID tenantId, UUID cvId, String name, String subject, String bodyTemplate, BigDecimal minMatchScore, List<UUID> matchIds) {
         // Handle optional SMTP account
         SmtpAccount smtpAccount = smtpAccountService.findActiveSmtpAccount(tenantId).orElse(null);
         
@@ -91,7 +99,16 @@ public class EmailCampaignService {
 
         CV cv = cvRepository.findById(cvId).orElseThrow();
         
-        List<MatchResult> matches = matchResultRepository.findByCvIdAndTenantIdAndMinScore(cvId, tenantId, minMatchScore);
+        List<MatchResult> matches;
+        if (matchIds != null && !matchIds.isEmpty()) {
+            matches = matchResultRepository.findAllById(matchIds);
+            // Verify tenant ownership
+            matches = matches.stream()
+                .filter(m -> m.getTenant().getId().equals(tenantId))
+                .collect(Collectors.toList());
+        } else {
+            matches = matchResultRepository.findByCvIdAndTenantIdAndMinScore(cvId, tenantId, minMatchScore);
+        }
 
         EmailCampaign campaign = EmailCampaign.builder()
             .tenant(cv.getTenant())
@@ -105,7 +122,31 @@ public class EmailCampaignService {
             .status(EmailCampaign.CampaignStatus.DRAFT)
             .build();
 
-        return campaignRepository.save(campaign);
+        campaign = campaignRepository.save(campaign);
+
+        // If specific matches were provided, initialize logs immediately
+        if (matchIds != null && !matchIds.isEmpty() && !matches.isEmpty()) {
+            // Call directly (same transaction) - campaign is already saved above
+            // We pass the campaign object directly to avoid lookup issues
+            List<UUID> logIds = initializeEmailLogsInternal(campaign, matches);
+            
+            // Trigger async generation after transaction commits
+            final UUID campaignId = campaign.getId();
+            if (TransactionSynchronizationManager.isActualTransactionActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        log.info("Transaction committed. Triggering async draft generation for {} logs.", logIds.size());
+                        self.generateDraftsForCampaign(campaignId, logIds);
+                    }
+                });
+            } else {
+                log.info("No active transaction. Triggering draft generation directly for {} logs.", logIds.size());
+                self.generateDraftsForCampaign(campaignId, logIds);
+            }
+        }
+
+        return campaign;
     }
 
     /**
@@ -327,7 +368,14 @@ public class EmailCampaignService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public List<UUID> initializeEmailLogs(UUID campaignId, List<MatchResult> matches) {
         EmailCampaign campaign = campaignRepository.findById(campaignId).orElseThrow();
-        
+        return initializeEmailLogsInternal(campaign, matches);
+    }
+
+    /**
+     * Internal method to initialize email logs - can be called with campaign object directly
+     * to avoid lookup issues when called within the same transaction.
+     */
+    private List<UUID> initializeEmailLogsInternal(EmailCampaign campaign, List<MatchResult> matches) {
         List<EmailLog> logsToSave = new ArrayList<>();
         Set<UUID> processedProfessorIds = new HashSet<>();
 
@@ -339,7 +387,7 @@ public class EmailCampaignService {
             }
             
             // 2. Check existence in DB to avoid unique constraint violation
-            boolean exists = emailLogRepository.existsByEmailCampaignIdAndProfessorId(campaignId, professor.getId());
+            boolean exists = emailLogRepository.existsByEmailCampaignIdAndProfessorId(campaign.getId(), professor.getId());
             if (!exists) {
                 logsToSave.add(createEmailLog(campaign, match));
                 processedProfessorIds.add(professor.getId());

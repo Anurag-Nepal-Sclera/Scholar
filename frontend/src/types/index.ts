@@ -112,6 +112,7 @@ export interface CreateCampaignRequest {
   subject: string;
   bodyTemplate: string;
   minMatchScore: number;
+  matchIds?: string[];
 }
 
 export interface EmailCampaignResponse {

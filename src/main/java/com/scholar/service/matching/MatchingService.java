@@ -120,12 +120,13 @@ public class MatchingService {
             matchResultRepository.flush(); // Ensure matches are visible to subsequent queries in this transaction context
             log.info("Match computation completed for CV {}. Found {} total matches.", cvId, matchResultsToSave.size());
 
-            // Automatically create an AI-driven outreach campaign if matches were found
-            if (!matchResultsToSave.isEmpty()) {
-                log.info("Creating automatic AI outreach campaign for CV: {}", cvId);
-                // Call self-proxy to ensure transaction boundary if needed, though direct call is fine if transactional propagation is REQUIRED
-                emailCampaignService.createAutoCampaign(cvId, tenantId);
-            }
+            // Phase 2: Disabled automatic campaign creation to allow human review layer
+            // Campaigns are now created manually via the "Generate Emails" button in MatchesPage
+            // if (!matchResultsToSave.isEmpty()) {
+            //     log.info("Creating automatic AI outreach campaign for CV: {}", cvId);
+            //     emailCampaignService.createAutoCampaign(cvId, tenantId);
+            // }
+            log.info("Match computation completed. Awaiting manual campaign creation via UI.");
 
         } catch (Exception e) {
             log.error("Failed to compute matches for CV ID: {}. Error: {}", cvId, e.getMessage(), e);
