@@ -24,6 +24,10 @@ buildNumber.properties
 *.ipr
 out/
 
+
+.env
+
+
 # Eclipse
 .classpath
 .project
@@ -39,8 +43,8 @@ bin/
 # Storage
 #storage/
 
-# Environment variables
-.env
 
 # Application specific
 application-local.properties
+ 
+.env
