@@ -48,7 +48,7 @@ public class EmailLog {
     @JoinColumn(name = "professor_id", nullable = false)
     private Professor professor;
 
-    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "match_result_id", nullable = false)
     private MatchResult matchResult;
 

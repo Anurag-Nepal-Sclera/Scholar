@@ -109,6 +109,18 @@ public class EmailCampaignService {
     @Transactional
     public void createAutoCampaign(UUID cvId, UUID tenantId) {
         CV cv = cvRepository.findById(cvId).orElseThrow();
+        UUID tenantIdFromCv = cv.getTenant().getId();
+        
+        // Prevent duplicate auto-campaigns for the same CV
+        List<EmailCampaign> existingCampaigns = campaignRepository.findAllByCvId(cvId);
+        boolean hasAutoCampaign = existingCampaigns.stream()
+            .anyMatch(c -> c.getName().startsWith("AI-Outreach:"));
+        
+        if (hasAutoCampaign) {
+            log.info("Auto-campaign already exists for CV {}. Skipping creation.", cvId);
+            return;
+        }
+
         BigDecimal autoThreshold = new BigDecimal("0.40"); // Default min score
         String campaignName = "AI-Outreach: " + cv.getOriginalFilename() + " (" + LocalDateTime.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE) + ")";
         
