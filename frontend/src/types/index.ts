@@ -133,12 +133,15 @@ export interface EmailLogResponse {
   id: string;
   recipientEmail: string;
   subject: string;
+  body?: string;
+  alternateBodies?: string;
   status: 'PENDING' | 'SENT' | 'FAILED' | 'BOUNCED';
   errorMessage?: string;
   retryCount: number;
   sentAt?: string;
   createdAt: string;
   professorId: string;
+  professorName?: string;
 }
 
 // SMTP Account

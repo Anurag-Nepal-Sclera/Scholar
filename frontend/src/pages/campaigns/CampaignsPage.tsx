@@ -6,6 +6,9 @@ import {
   executeCampaign,
   cancelCampaign,
   fetchCampaignLogs,
+  updateEmailDraft,
+  regenerateEmailDraft,
+  sendIndividualEmail,
 } from '@/store/slices/campaignSlice';
 import { fetchCVs } from '@/store/slices/cvSlice';
 import { openModal, closeModal } from '@/store/slices/uiSlice';
@@ -32,6 +35,7 @@ import {
   Send,
   AlertCircle,
   Eye,
+  Edit3,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -48,6 +52,11 @@ export const CampaignsPage: React.FC = () => {
   const { modal } = useAppSelector((state) => state.ui);
 
   const [selectedCampaign, setSelectedCampaign] = useState<EmailCampaignResponse | null>(null);
+  const [selectedLog, setSelectedLog] = useState<EmailLogResponse | null>(null);
+  const [draftBody, setDraftBody] = useState('');
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+
   const [formData, setFormData] = useState<CreateCampaignRequest>({
     cvId: '',
     name: '',
@@ -115,6 +124,55 @@ export const CampaignsPage: React.FC = () => {
     setSelectedCampaign(campaign);
     dispatch(fetchCampaignLogs({ campaignId: campaign.id }));
     dispatch(openModal({ type: 'viewLogs', data: campaign }));
+  };
+
+  const handleViewLogDetails = (log: EmailLogResponse) => {
+    setSelectedLog(log);
+    setDraftBody(log.body || '');
+    dispatch(openModal({ type: 'editDraft' }));
+  };
+
+  const handleSaveDraft = async () => {
+    if (selectedLog && draftBody) {
+      const result = await dispatch(updateEmailDraft({ logId: selectedLog.id, body: draftBody }));
+      if (updateEmailDraft.fulfilled.match(result)) {
+        toast.success('Draft updated');
+        // Update local state if needed or fetch logs again
+        // dispatch(fetchCampaignLogs({ campaignId: selectedCampaign?.id || '' }));
+      }
+    }
+  };
+
+  const handleRegenerateDraft = async () => {
+    if (selectedLog) {
+      setIsRegenerating(true);
+      const result = await dispatch(regenerateEmailDraft(selectedLog.id));
+      setIsRegenerating(false);
+      if (regenerateEmailDraft.fulfilled.match(result)) {
+        setDraftBody(result.payload.body || '');
+        toast.success('Draft regenerated');
+      }
+    }
+  };
+
+  const handleSendIndividual = async () => {
+    if (selectedLog) {
+        // Save first if changed
+        if (selectedLog.body !== draftBody) {
+            await dispatch(updateEmailDraft({ logId: selectedLog.id, body: draftBody }));
+        }
+
+        setIsSending(true);
+        const result = await dispatch(sendIndividualEmail(selectedLog.id));
+        setIsSending(false);
+        if (sendIndividualEmail.fulfilled.match(result)) {
+            toast.success('Email sent successfully');
+            dispatch(closeModal());
+            if (selectedCampaign) {
+                dispatch(fetchCampaignLogs({ campaignId: selectedCampaign.id }));
+            }
+        }
+    }
   };
 
   const resetForm = () => {
@@ -383,7 +441,7 @@ Best regards`;
         ) : (
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {logs.map((log) => (
-              <LogEntry key={log.id} log={log} />
+              <LogEntry key={log.id} log={log} onClick={() => handleViewLogDetails(log)} />
             ))}
             {logsPagination.totalElements > logs.length && (
               <p className="text-sm text-center text-gray-500 py-2">
@@ -393,14 +451,83 @@ Best regards`;
           </div>
         )}
       </Modal>
+
+      {/* Edit Draft Modal */}
+      <Modal
+        isOpen={modal.isOpen && modal.type === 'editDraft'}
+        onClose={() => {
+            // Re-open logs modal to act as "back"
+            if (selectedCampaign) {
+                dispatch(openModal({ type: 'viewLogs', data: selectedCampaign }));
+            } else {
+                dispatch(closeModal());
+            }
+            setSelectedLog(null);
+        }}
+        title={`Review Email - ${selectedLog?.professorName || selectedLog?.recipientEmail}`}
+        size="lg"
+      >
+        <div className="space-y-4">
+            <div>
+                <p className="text-sm font-medium text-gray-700">To: {selectedLog?.recipientEmail}</p>
+                <p className="text-sm text-gray-500">Subject: {selectedLog?.subject}</p>
+            </div>
+            
+            <Textarea
+                label="Email Body"
+                value={draftBody}
+                onChange={(e) => setDraftBody(e.target.value)}
+                rows={12}
+                disabled={selectedLog?.status === 'SENT'}
+            />
+
+            <div className="flex justify-between items-center pt-4">
+                <Button
+                    variant="outline"
+                    icon={<RefreshCw className="w-4 h-4" />}
+                    onClick={handleRegenerateDraft}
+                    loading={isRegenerating}
+                    disabled={selectedLog?.status === 'SENT'}
+                >
+                    Regenerate with AI
+                </Button>
+
+                <div className="flex gap-2">
+                    <Button
+                        variant="outline"
+                        onClick={handleSaveDraft}
+                        disabled={selectedLog?.status === 'SENT'}
+                    >
+                        Save Draft
+                    </Button>
+                    <Button
+                        icon={<Send className="w-4 h-4" />}
+                        onClick={handleSendIndividual}
+                        loading={isSending}
+                        disabled={!smtpAccount || selectedLog?.status === 'SENT'}
+                    >
+                        Send Now
+                    </Button>
+                </div>
+            </div>
+        </div>
+      </Modal>
     </div>
   );
 };
 
-const LogEntry: React.FC<{ log: EmailLogResponse }> = ({ log }) => (
-  <div className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
+const LogEntry: React.FC<{ log: EmailLogResponse; onClick: () => void }> = ({ log, onClick }) => (
+  <div 
+    className="flex items-center justify-between py-3 px-4 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
+    onClick={onClick}
+  >
     <div className="flex-1 min-w-0">
-      <p className="text-sm font-medium text-gray-900 truncate">{log.recipientEmail}</p>
+      <div className="flex items-center gap-2">
+        <p className="text-sm font-medium text-gray-900 truncate">
+            {log.professorName || log.recipientEmail}
+        </p>
+        <span className="text-xs text-gray-500">({log.recipientEmail})</span>
+      </div>
       {log.errorMessage && (
         <p className="text-xs text-red-500 truncate">{log.errorMessage}</p>
       )}
@@ -412,6 +539,8 @@ const LogEntry: React.FC<{ log: EmailLogResponse }> = ({ log }) => (
         </span>
       )}
       <StatusBadge status={log.status} />
+      <Edit3 className="w-4 h-4 text-gray-400" />
     </div>
   </div>
 );
+

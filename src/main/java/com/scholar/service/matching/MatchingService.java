@@ -112,11 +112,13 @@ public class MatchingService {
             // Save all match results (upsert)
             log.debug("Saving {} match results (upsert) for CV ID: {}", matchResultsToSave.size(), cvId);
             matchResultRepository.saveAll(matchResultsToSave);
+            matchResultRepository.flush(); // Ensure matches are visible to subsequent queries in this transaction context
             log.info("Match computation completed for CV {}. Found {} total matches.", cvId, matchResultsToSave.size());
 
             // Automatically create an AI-driven outreach campaign if matches were found
             if (!matchResultsToSave.isEmpty()) {
                 log.info("Creating automatic AI outreach campaign for CV: {}", cvId);
+                // Call self-proxy to ensure transaction boundary if needed, though direct call is fine if transactional propagation is REQUIRED
                 emailCampaignService.createAutoCampaign(cvId, tenantId);
             }
 

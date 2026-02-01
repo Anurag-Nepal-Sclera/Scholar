@@ -137,9 +137,9 @@ export const SettingsPage: React.FC = () => {
     <div className="space-y-8 max-w-4xl">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Configuration</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Manage your organizations and SMTP configuration
+          Manage your students and SMTP configuration
         </p>
       </div>
 
@@ -147,15 +147,15 @@ export const SettingsPage: React.FC = () => {
       <section>
         <Card>
           <CardHeader
-            title="Organizations"
-            description="Manage your organizations and switch between them"
+            title="Students"
+            description="Manage your student profiles"
             action={
               <Button
                 size="sm"
                 icon={<Plus className="w-4 h-4" />}
                 onClick={() => dispatch(openModal({ type: 'createTenant' }))}
               >
-                Add Organization
+                Add Student
               </Button>
             }
           />
@@ -167,8 +167,8 @@ export const SettingsPage: React.FC = () => {
           ) : tenants.length === 0 ? (
             <EmptyState
               icon={<Building2 className="w-6 h-6" />}
-              title="No organizations"
-              description="Create your first organization to get started."
+              title="No students"
+              description="Create your first student profile to get started."
             />
           ) : (
             <div className="space-y-2">
@@ -378,12 +378,12 @@ export const SettingsPage: React.FC = () => {
           setTenantForm({ name: '', email: '' });
           setTenantErrors({});
         }}
-        title="Create Organization"
+        title="Create Student Profile"
       >
         <div className="space-y-4">
           <Input
-            label="Organization Name"
-            placeholder="My Company"
+            label="Student Name"
+            placeholder="John Doe"
             icon={<Building2 className="w-4 h-4" />}
             value={tenantForm.name}
             onChange={(e) => setTenantForm({ ...tenantForm, name: e.target.value })}
@@ -392,7 +392,7 @@ export const SettingsPage: React.FC = () => {
           <Input
             label="Contact Email"
             type="email"
-            placeholder="contact@company.com"
+            placeholder="john.doe@example.com"
             icon={<Mail className="w-4 h-4" />}
             value={tenantForm.email}
             onChange={(e) => setTenantForm({ ...tenantForm, email: e.target.value })}
@@ -421,7 +421,7 @@ export const SettingsPage: React.FC = () => {
           dispatch(closeModal());
           setDeletingTenant(null);
         }}
-        title="Delete Organization"
+        title="Delete Student Profile"
       >
         <Alert variant="error" className="mb-4">
           This action cannot be undone. All CVs, matches, and campaigns will be permanently deleted.
@@ -440,7 +440,7 @@ export const SettingsPage: React.FC = () => {
             Cancel
           </Button>
           <Button variant="danger" onClick={handleDeleteTenant}>
-            Delete Organization
+            Delete Student Profile
           </Button>
         </div>
       </Modal>

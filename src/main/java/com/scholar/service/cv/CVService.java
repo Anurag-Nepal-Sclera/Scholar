@@ -2,15 +2,17 @@ package com.scholar.service.cv;
 
 import com.scholar.domain.entity.CV;
 import com.scholar.domain.entity.CvKeyword;
+import com.scholar.domain.entity.EmailCampaign;
 import com.scholar.domain.entity.Tenant;
 import com.scholar.domain.entity.UserProfile;
 import com.scholar.domain.repository.CVRepository;
 import com.scholar.domain.repository.CvKeywordRepository;
+import com.scholar.domain.repository.EmailCampaignRepository;
 import com.scholar.domain.repository.MatchResultRepository;
+import com.scholar.service.matching.MatchingService;
 import com.scholar.service.storage.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import com.scholar.service.matching.MatchingService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
@@ -28,7 +30,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Service for managing CV uploads, parsing, and keyword extraction.
@@ -41,6 +42,7 @@ public class CVService {
     private final CVRepository cvRepository;
     private final CvKeywordRepository cvKeywordRepository;
     private final MatchResultRepository matchResultRepository;
+    private final EmailCampaignRepository emailCampaignRepository;
     private final FileStorageService fileStorageService;
     private final DocumentTextExtractor textExtractor;
     private final OpenRouterService openRouterService;
@@ -50,6 +52,7 @@ public class CVService {
     public CVService(CVRepository cvRepository, 
                      CvKeywordRepository cvKeywordRepository,
                      MatchResultRepository matchResultRepository,
+                     EmailCampaignRepository emailCampaignRepository,
                      FileStorageService fileStorageService,
                      DocumentTextExtractor textExtractor,
                      OpenRouterService openRouterService,
@@ -58,6 +61,7 @@ public class CVService {
         this.cvRepository = cvRepository;
         this.cvKeywordRepository = cvKeywordRepository;
         this.matchResultRepository = matchResultRepository;
+        this.emailCampaignRepository = emailCampaignRepository;
         this.fileStorageService = fileStorageService;
         this.textExtractor = textExtractor;
         this.openRouterService = openRouterService;
@@ -131,12 +135,9 @@ public class CVService {
     @Transactional
     public void parseAndExtractKeywords(UUID cvId) {
         log.info("Starting asynchronous parsing for CV ID: {}", cvId);
-        // Add a small sleep to ensure DB transaction from upload is visible
-        try { Thread.sleep(500); } catch (InterruptedException ignored) {}
-        
         try {
             CV cv = cvRepository.findById(cvId)
-                .orElseThrow(() -> new IllegalArgumentException("CV not found in database: " + cvId));
+                .orElseThrow(() -> new IllegalArgumentException("CV not found: " + cvId));
 
             log.debug("CV details retrieved: {}, MIME type: {}", cv.getOriginalFilename(), cv.getMimeType());
 
@@ -154,13 +155,8 @@ public class CVService {
             log.debug("Text extraction completed. Extracted length: {} characters", extractedText.length());
 
             // Extract keywords using AI (Comprehensive technical extraction)
-            log.debug("Extracting technical keywords from text using AI...");
+            log.debug("Extracting ~200 technical keywords from text using AI...");
             List<String> aiKeywordsRaw = openRouterService.extractKeywords(extractedText);
-            
-            if (aiKeywordsRaw.isEmpty()) {
-                log.warn("AI extraction returned no keywords. Attempting fallback extraction.");
-                aiKeywordsRaw = fallbackExtraction(extractedText);
-            }
             
             // Deduplicate keywords while preserving rank
             List<String> aiKeywords = new ArrayList<>(new java.util.LinkedHashSet<>(aiKeywordsRaw));
@@ -199,22 +195,22 @@ public class CVService {
             // Update CV status
             cv.setParsingStatus(CV.ParsingStatus.COMPLETED);
             cv.setParsedAt(LocalDateTime.now());
-            cvRepository.saveAndFlush(cv);
+            cvRepository.save(cv);
 
-            log.info("CV parsing completed successfully: {}. Total keywords saved: {}. Proceeding to matching...", cvId, keywords.size());
+            log.info("CV parsing completed successfully: {}. Total keywords saved: {}", cvId, keywords.size());
 
-            // Automatically trigger match computation after successful parsing transaction commits
-            final UUID tenantId = cv.getTenant().getId();
+            // Automatically trigger match computation after successful parsing, ensuring transaction commit first
+            log.info("Triggering automatic match computation for CV: {}", cvId);
+            
             if (TransactionSynchronizationManager.isActualTransactionActive()) {
                 TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                     @Override
                     public void afterCommit() {
-                        matchingService.computeMatches(cvId, tenantId);
-                        log.info("Automatic match computation triggered for CV: {} after transaction commit", cvId);
+                        matchingService.computeMatches(cvId, cv.getTenant().getId());
                     }
                 });
             } else {
-                matchingService.computeMatches(cvId, tenantId);
+                matchingService.computeMatches(cvId, cv.getTenant().getId());
             }
         } catch (Exception e) {
             log.error("CV parsing failed for ID: {}. Error: {}", cvId, e.getMessage(), e);
@@ -314,10 +310,23 @@ public class CVService {
         }
 
         // Manually delete related data since we removed cascade
-        log.debug("Deleting keywords and match results for CV ID: {}", cvId);
-        cvKeywordRepository.deleteByCvId(cvId);
-        matchResultRepository.deleteByCvId(cvId);
+        log.debug("Deleting keywords, match results and campaigns for CV ID: {}", cvId);
+        
+        // 1. Delete Campaigns (which should cascade to EmailLogs)
+        List<EmailCampaign> campaigns = emailCampaignRepository.findAllByCvId(cvId);
+        if (!campaigns.isEmpty()) {
+            log.debug("Deleting {} campaigns associated with CV", campaigns.size());
+            emailCampaignRepository.deleteAll(campaigns);
+            emailCampaignRepository.flush(); // Ensure email_log rows are gone
+        }
 
+        // 2. Delete Match Results (now safe because EmailLogs referencing them are gone)
+        matchResultRepository.deleteByCvId(cvId);
+        matchResultRepository.flush();
+
+        // 3. Delete Keywords
+        cvKeywordRepository.deleteByCvId(cvId);
+        
         cvRepository.delete(cv);
         log.info("CV ID: {} successfully deleted from database", cvId);
     }
@@ -338,33 +347,5 @@ public class CVService {
         if (file.getSize() > maxSizeBytes) {
             throw new IllegalArgumentException("File size exceeds maximum allowed: " + maxSizeMb + "MB");
         }
-    }
-
-    /**
-     * Fallback keyword extraction using simple regex/string matching.
-     */
-    private List<String> fallbackExtraction(String text) {
-        log.info("Running fallback keyword extraction");
-        List<String> keywords = new ArrayList<>();
-        if (text == null || text.isBlank()) return keywords;
-
-        // Common technical terms that might be in a CV
-        String[] commonTerms = {
-            "Java", "Python", "C++", "Spring Boot", "Machine Learning", "Data Science",
-            "Artificial Intelligence", "Neural Networks", "Deep Learning", "SQL", "NoSQL",
-            "Docker", "Kubernetes", "Cloud Computing", "AWS", "Azure", "React", "Angular",
-            "Node.js", "Microservices", "REST API", "Git", "Agile", "Scrum", "Research",
-            "Algorithms", "Data Structures", "Big Data", "Spark", "Hadoop"
-        };
-
-        String lowerText = text.toLowerCase();
-        for (String term : commonTerms) {
-            if (lowerText.contains(term.toLowerCase())) {
-                keywords.add(term);
-            }
-        }
-        
-        log.info("Fallback extraction found {} keywords", keywords.size());
-        return keywords;
     }
 }

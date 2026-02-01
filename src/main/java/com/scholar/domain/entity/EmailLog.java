@@ -63,6 +63,9 @@ public class EmailLog {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String body;
 
+    @Column(name = "alternate_bodies", columnDefinition = "TEXT")
+    private String alternateBodies; // Store alternate options
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
     @Builder.Default

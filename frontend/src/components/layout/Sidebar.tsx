@@ -22,7 +22,7 @@ const navigation = [
   { name: 'CVs', href: '/cvs', icon: FileText },
   { name: 'Matches', href: '/matches', icon: Users },
   { name: 'Campaigns', href: '/campaigns', icon: Mail },
-  { name: 'Settings', href: '/settings', icon: Settings },
+  { name: 'Configuration', href: '/settings', icon: Settings },
 ];
 
 export const Sidebar: React.FC = () => {

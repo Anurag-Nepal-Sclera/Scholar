@@ -68,6 +68,10 @@ public class CV {
     @Column(name = "uploaded_at", nullable = false, updatable = false)
     private LocalDateTime uploadedAt;
 
+    @OneToMany(mappedBy = "cv", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private Set<CvExperience> experiences = new HashSet<>();
+
     public enum ParsingStatus {
         PENDING, IN_PROGRESS, COMPLETED, FAILED
     }
