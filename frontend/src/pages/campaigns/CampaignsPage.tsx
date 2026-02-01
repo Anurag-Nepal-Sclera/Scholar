@@ -5,7 +5,9 @@ import {
   createCampaign,
   executeCampaign,
   cancelCampaign,
+  deleteCampaign,
   fetchCampaignLogs,
+  fetchTenantLogs,
   updateEmailDraft,
   regenerateEmailDraft,
   sendIndividualEmail,
@@ -40,6 +42,7 @@ import {
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import { CreateCampaignRequest, EmailCampaignResponse, EmailLogResponse } from '@/types';
+import clsx from 'clsx';
 
 export const CampaignsPage: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -56,22 +59,27 @@ export const CampaignsPage: React.FC = () => {
   const [draftBody, setDraftBody] = useState('');
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [activeTab, setActiveTab] = useState<'campaigns' | 'history'>('campaigns');
 
   const [formData, setFormData] = useState<CreateCampaignRequest>({
     cvId: '',
     name: '',
     subject: '',
     bodyTemplate: '',
-    minMatchScore: 0.5,
+    minMatchScore: 0.4,
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (currentTenant) {
-      dispatch(fetchCampaigns({}));
+      if (activeTab === 'campaigns') {
+        dispatch(fetchCampaigns({}));
+      } else {
+        dispatch(fetchTenantLogs({}));
+      }
       dispatch(fetchCVs({}));
     }
-  }, [currentTenant, dispatch]);
+  }, [currentTenant, dispatch, activeTab]);
 
   const cvOptions = cvs
     .filter((cv) => cv.parsingStatus === 'COMPLETED')
@@ -181,7 +189,7 @@ export const CampaignsPage: React.FC = () => {
       name: '',
       subject: '',
       bodyTemplate: '',
-      minMatchScore: 0.5,
+      minMatchScore: 0.4,
     });
     setFormErrors({});
   };
@@ -199,8 +207,8 @@ Best regards`;
   if (!currentTenant) {
     return (
       <EmptyState
-        title="No organization selected"
-        description="Please select an organization to manage campaigns."
+        title="No student selected"
+        description="Please select a student to manage campaigns."
       />
     );
   }
@@ -240,6 +248,36 @@ Best regards`;
         </Alert>
       )}
 
+      {/* Tabs */}
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('campaigns')}
+            className={clsx(
+              'whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm',
+              activeTab === 'campaigns'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            )}
+          >
+            Campaigns
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={clsx(
+              'whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm',
+              activeTab === 'history'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            )}
+          >
+            History
+          </button>
+        </nav>
+      </div>
+
+      {activeTab === 'campaigns' ? (
+      <>
       {/* Campaigns List */}
       {loading && campaigns.length === 0 ? (
         <div className="flex items-center justify-center h-64">
@@ -323,6 +361,33 @@ Best regards`;
             </Card>
           ))}
         </div>
+      )}
+      </>
+      ) : (
+        <>
+          {/* History List */}
+          {logsLoading && logs.length === 0 ? (
+            <div className="flex items-center justify-center h-64">
+              <Spinner size="lg" />
+            </div>
+          ) : logs.length === 0 ? (
+            <EmptyState
+              title="No history yet"
+              description="No emails have been generated or sent yet."
+              icon={<Mail className="w-6 h-6" />}
+            />
+          ) : (
+            <div className="space-y-4">
+              {logs.map((log) => (
+                <LogEntry 
+                  key={log.id} 
+                  log={log} 
+                  onClick={() => handleViewLogDetails(log)} 
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {/* Create Campaign Modal */}

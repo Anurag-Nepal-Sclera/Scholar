@@ -92,7 +92,7 @@ export const SettingsPage: React.FC = () => {
 
     const result = await dispatch(saveSmtpAccount(smtpForm));
     if (saveSmtpAccount.fulfilled.match(result)) {
-      toast.success('SMTP settings saved successfully');
+      toast.success('SMTP configuration saved successfully');
     }
   };
 
@@ -105,7 +105,7 @@ export const SettingsPage: React.FC = () => {
 
   const validateTenantForm = () => {
     const errors: Record<string, string> = {};
-    if (!tenantForm.name.trim()) errors.name = 'Organization name is required';
+    if (!tenantForm.name.trim()) errors.name = 'Student name is required';
     if (!tenantForm.email) errors.email = 'Email is required';
     setTenantErrors(errors);
     return Object.keys(errors).length === 0;
@@ -116,7 +116,7 @@ export const SettingsPage: React.FC = () => {
 
     const result = await dispatch(createTenant(tenantForm));
     if (createTenant.fulfilled.match(result)) {
-      toast.success('Organization created successfully');
+      toast.success('Student profile created successfully');
       dispatch(closeModal());
       setTenantForm({ name: '', email: '' });
     }
@@ -127,7 +127,7 @@ export const SettingsPage: React.FC = () => {
 
     const result = await dispatch(deleteTenant(deletingTenant.id));
     if (deleteTenant.fulfilled.match(result)) {
-      toast.success('Organization deleted');
+      toast.success('Student profile deleted');
     }
     setDeletingTenant(null);
     dispatch(closeModal());
@@ -143,7 +143,7 @@ export const SettingsPage: React.FC = () => {
         </p>
       </div>
 
-      {/* Organizations Section */}
+      {/* Students Section */}
       <section>
         <Card>
           <CardHeader
@@ -244,7 +244,7 @@ export const SettingsPage: React.FC = () => {
 
           {!currentTenant ? (
             <Alert variant="info">
-              Please select an organization to configure SMTP settings.
+              Please select a student to configure SMTP.
             </Alert>
           ) : smtpLoading ? (
             <div className="flex items-center justify-center py-8">
@@ -361,7 +361,7 @@ export const SettingsPage: React.FC = () => {
                     onClick={handleSaveSmtp}
                     loading={smtpSaving}
                   >
-                    Save SMTP Settings
+                    Save SMTP Configuration
                   </Button>
                 </div>
               </div>

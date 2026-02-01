@@ -58,7 +58,7 @@ public class EmailCampaign {
 
     @Column(name = "min_match_score", nullable = false, precision = 5, scale = 4)
     @Builder.Default
-    private BigDecimal minMatchScore = new BigDecimal("0.5000");
+    private BigDecimal minMatchScore = new BigDecimal("0.4000");
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)

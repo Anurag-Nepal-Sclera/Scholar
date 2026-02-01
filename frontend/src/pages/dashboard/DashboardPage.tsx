@@ -30,14 +30,14 @@ export const DashboardPage: React.FC = () => {
   if (!currentTenant) {
     return (
       <EmptyState
-        title="No organization selected"
-        description="Please create or select an organization to get started."
+        title="No student selected"
+        description="Please create or select a student to get started."
         action={
           <Link
             to="/settings"
             className="text-primary-600 hover:text-primary-700 font-medium"
           >
-            Go to Settings
+            Go to Configuration
           </Link>
         }
       />
@@ -185,7 +185,7 @@ export const DashboardPage: React.FC = () => {
             />
             <QuickAction
               icon={Settings}
-              label="Configure SMTP settings"
+              label="Configure SMTP"
               href="/settings"
             />
           </div>

@@ -11,7 +11,9 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
+import jakarta.annotation.PostConstruct;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,6 +37,16 @@ public class OpenRouterService {
     private String apiUrl;
 
     private final RestTemplate restTemplate = new RestTemplate();
+
+    @PostConstruct
+    public void validateConfig() {
+        if (apiKey == null || apiKey.isBlank()) {
+            log.error("OpenRouter API key is missing!");
+        } else if (!apiKey.startsWith("sk-or-v1-")) {
+            log.warn("OpenRouter API key format looks suspicious. It should typically start with 'sk-or-v1-'. Current key starts with: {}...", 
+                    apiKey.substring(0, Math.min(apiKey.length(), 10)));
+        }
+    }
 
     public List<String> extractExperiences(String text) {
         log.info("Extracting experiences from CV text using AI...");
@@ -166,6 +178,11 @@ public class OpenRouterService {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(apiKey);
+        log.info("Calling OpenRouter API with key: {}... (total length: {})", 
+                (apiKey != null && apiKey.length() > 10) ? apiKey.substring(0, 10) : "empty",
+                (apiKey != null) ? apiKey.length() : 0);
+        headers.set("HTTP-Referer", "http://localhost:9090"); // Required by OpenRouter for rankings/free tier
+        headers.set("X-Title", "Scholar App");
 
         OpenRouterRequest request = OpenRouterRequest.builder()
                 .model(model)
@@ -179,6 +196,9 @@ public class OpenRouterService {
             if (response != null && response.getChoices() != null && !response.getChoices().isEmpty()) {
                 return response.getChoices().get(0).getMessage().getContent();
             }
+        } catch (HttpStatusCodeException e) {
+            log.error("OpenRouter API call failed with status: {}. Response body: {}", 
+                    e.getStatusCode(), e.getResponseBodyAsString());
         } catch (Exception e) {
             log.error("OpenRouter API call failed", e);
         }
