@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { fetchMatches, fetchMatchesAboveThreshold, setMinScoreFilter } from '@/store/slices/matchSlice';
+import { fetchMatches, fetchMatchesAboveThreshold } from '@/store/slices/matchSlice';
 import { fetchCVs } from '@/store/slices/cvSlice';
 import {
   Card,
   Button,
-  Spinner,
+  LoadingSpinner,
   EmptyState,
   Select,
   Input,
@@ -26,10 +26,10 @@ import clsx from 'clsx';
 export const MatchesPage: React.FC = () => {
   const dispatch = useAppDispatch();
   const [searchParams] = useSearchParams();
-  const { matches, loading, pagination, filters } = useAppSelector((state) => state.match);
+  const { matches, loading } = useAppSelector((state) => state.match);
   const { cvs } = useAppSelector((state) => state.cv);
   const { currentTenant } = useAppSelector((state) => state.tenant);
-  
+
   const [selectedCvId, setSelectedCvId] = useState<string>(searchParams.get('cvId') || '');
   const [searchTerm, setSearchTerm] = useState('');
   const [minScore, setMinScore] = useState<string>('0');
@@ -90,8 +90,8 @@ export const MatchesPage: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Match Results</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Match Results</h1>
+        <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
           View and filter professor matches based on CV keywords
         </p>
       </div>
@@ -106,7 +106,7 @@ export const MatchesPage: React.FC = () => {
             onChange={(e) => setSelectedCvId(e.target.value)}
             placeholder="Choose a CV..."
           />
-          
+
           <Input
             label="Minimum Score"
             type="number"
@@ -117,7 +117,7 @@ export const MatchesPage: React.FC = () => {
             onChange={(e) => setMinScore(e.target.value)}
             icon={<Filter className="w-4 h-4" />}
           />
-          
+
           <Input
             label="Search"
             placeholder="Search professors..."
@@ -125,7 +125,7 @@ export const MatchesPage: React.FC = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
             icon={<Search className="w-4 h-4" />}
           />
-          
+
           <div className="flex items-end">
             <Button
               variant="outline"
@@ -153,7 +153,7 @@ export const MatchesPage: React.FC = () => {
         />
       ) : loading ? (
         <div className="flex items-center justify-center h-64">
-          <Spinner size="lg" />
+          <LoadingSpinner message="Finding matches..." />
         </div>
       ) : filteredMatches.length === 0 ? (
         <EmptyState
@@ -167,35 +167,35 @@ export const MatchesPage: React.FC = () => {
         />
       ) : (
         <>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 dark:text-slate-400">
             Found {filteredMatches.length} matches
           </p>
-          
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {filteredMatches.map((match) => (
               <Card key={match.id} className="flex flex-col">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-3 gap-3">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
                       <span className="text-primary-600 font-medium">
                         {match.professor.firstName[0]}
                         {match.professor.lastName[0]}
                       </span>
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-900">
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-900 dark:text-white truncate">
                         {match.professor.firstName} {match.professor.lastName}
                       </p>
-                      <p className="text-sm text-gray-500 flex items-center gap-1">
-                        <Mail className="w-3 h-3" />
+                      <p className="text-sm text-gray-500 dark:text-slate-400 flex items-center gap-1 truncate">
+                        <Mail className="w-3 h-3 flex-shrink-0" />
                         {match.professor.email}
                       </p>
                     </div>
                   </div>
-                  
+
                   <div
                     className={clsx(
-                      'px-3 py-1 rounded-full text-sm font-bold',
+                      'px-3 py-1 rounded-full text-sm font-bold self-start sm:self-auto',
                       getScoreColor(match.matchScore)
                     )}
                   >
@@ -204,25 +204,25 @@ export const MatchesPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-2 text-sm mb-4">
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Building2 className="w-4 h-4 text-gray-400" />
+                  <div className="flex items-center gap-2 text-gray-600 dark:text-slate-300">
+                    <Building2 className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                     {match.professor.universityName}
                     {match.professor.universityCountry && (
-                      <span className="text-gray-400">
+                      <span className="text-gray-400 dark:text-slate-500">
                         ({match.professor.universityCountry})
                       </span>
                     )}
                   </div>
                   {match.professor.department && (
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <GraduationCap className="w-4 h-4 text-gray-400" />
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-slate-300">
+                      <GraduationCap className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                       {match.professor.department}
                     </div>
                   )}
                 </div>
 
-                <div className="border-t border-gray-100 pt-3 mt-auto">
-                  <p className="text-xs text-gray-500 mb-2">
+                <div className="border-t border-gray-100 dark:border-slate-800 pt-3 mt-auto">
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mb-2">
                     Matched Keywords ({match.totalMatchedKeywords})
                   </p>
                   <div className="flex flex-wrap gap-1">

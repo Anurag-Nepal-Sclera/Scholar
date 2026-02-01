@@ -5,7 +5,6 @@ import {
   createCampaign,
   executeCampaign,
   cancelCampaign,
-  deleteCampaign,
   fetchCampaignLogs,
   fetchTenantLogs,
   updateEmailDraft,
@@ -17,9 +16,7 @@ import { fetchSmtpAccount } from '@/store/slices/smtpSlice';
 import { openModal, closeModal } from '@/store/slices/uiSlice';
 import {
   Card,
-  CardHeader,
   Button,
-  Spinner,
   StatusBadge,
   EmptyState,
   Modal,
@@ -27,6 +24,7 @@ import {
   Select,
   Textarea,
   Alert,
+  LoadingSpinner,
 } from '@/components/ui';
 import {
   Mail,
@@ -167,21 +165,21 @@ export const CampaignsPage: React.FC = () => {
 
   const handleSendIndividual = async () => {
     if (selectedLog) {
-        // Save first if changed
-        if (selectedLog.body !== draftBody) {
-            await dispatch(updateEmailDraft({ logId: selectedLog.id, body: draftBody }));
-        }
+      // Save first if changed
+      if (selectedLog.body !== draftBody) {
+        await dispatch(updateEmailDraft({ logId: selectedLog.id, body: draftBody }));
+      }
 
-        setIsSending(true);
-        const result = await dispatch(sendIndividualEmail(selectedLog.id));
-        setIsSending(false);
-        if (sendIndividualEmail.fulfilled.match(result)) {
-            toast.success('Email sent successfully');
-            dispatch(closeModal());
-            if (selectedCampaign) {
-                dispatch(fetchCampaignLogs({ campaignId: selectedCampaign.id }));
-            }
+      setIsSending(true);
+      const result = await dispatch(sendIndividualEmail(selectedLog.id));
+      setIsSending(false);
+      if (sendIndividualEmail.fulfilled.match(result)) {
+        toast.success('Email sent successfully');
+        dispatch(closeModal());
+        if (selectedCampaign) {
+          dispatch(fetchCampaignLogs({ campaignId: selectedCampaign.id }));
         }
+      }
     }
   };
 
@@ -220,8 +218,8 @@ Best regards`;
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Email Campaigns</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Email Campaigns</h1>
+          <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
             Create and manage outreach campaigns to matched professors
           </p>
         </div>
@@ -251,7 +249,7 @@ Best regards`;
       )}
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-gray-200 dark:border-slate-800">
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab('campaigns')}
@@ -279,98 +277,98 @@ Best regards`;
       </div>
 
       {activeTab === 'campaigns' ? (
-      <>
-      {/* Campaigns List */}
-      {loading && campaigns.length === 0 ? (
-        <div className="flex items-center justify-center h-64">
-          <Spinner size="lg" />
-        </div>
-      ) : campaigns.length === 0 ? (
-        <EmptyState
-          icon={<Mail className="w-6 h-6" />}
-          title="No campaigns yet"
-          description="Create your first email campaign to reach out to matched professors."
-          action={
-            <Button
-              icon={<Plus className="w-4 h-4" />}
-              onClick={() => dispatch(openModal({ type: 'createCampaign' }))}
-            >
-              Create Campaign
-            </Button>
-          }
-        />
-      ) : (
-        <div className="space-y-4">
-          {campaigns.map((campaign) => (
-            <Card key={campaign.id}>
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="font-semibold text-gray-900">{campaign.name}</h3>
-                    <StatusBadge status={campaign.status} />
-                  </div>
-                  <p className="text-sm text-gray-500 mb-2">{campaign.subject}</p>
-                  <div className="flex flex-wrap gap-4 text-xs text-gray-500">
-                    <span className="flex items-center gap-1">
-                      <Send className="w-3 h-3" />
-                      {campaign.sentCount}/{campaign.totalRecipients} sent
-                    </span>
-                    {campaign.failedCount > 0 && (
-                      <span className="flex items-center gap-1 text-red-500">
-                        <AlertCircle className="w-3 h-3" />
-                        {campaign.failedCount} failed
-                      </span>
-                    )}
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      {format(new Date(campaign.createdAt), 'MMM d, yyyy')}
-                    </span>
-                  </div>
-                </div>
+        <>
+          {/* Campaigns List */}
+          {loading && campaigns.length === 0 ? (
+            <div className="flex items-center justify-center h-64">
+              <LoadingSpinner message="Loading campaigns..." />
+            </div>
+          ) : campaigns.length === 0 ? (
+            <EmptyState
+              icon={<Mail className="w-6 h-6" />}
+              title="No campaigns yet"
+              description="Create your first email campaign to reach out to matched professors."
+              action={
+                <Button
+                  icon={<Plus className="w-4 h-4" />}
+                  onClick={() => dispatch(openModal({ type: 'createCampaign' }))}
+                >
+                  Create Campaign
+                </Button>
+              }
+            />
+          ) : (
+            <div className="space-y-4">
+              {campaigns.map((campaign) => (
+                <Card key={campaign.id}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="font-semibold text-gray-900 dark:text-white truncate">{campaign.name}</h3>
+                        <StatusBadge status={campaign.status} />
+                      </div>
+                      <p className="text-sm text-gray-500 dark:text-slate-400 mb-2 truncate">{campaign.subject}</p>
+                      <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-gray-500 dark:text-slate-400">
+                        <span className="flex items-center gap-1">
+                          <Send className="w-3 h-3" />
+                          {campaign.sentCount}/{campaign.totalRecipients} sent
+                        </span>
+                        {campaign.failedCount > 0 && (
+                          <span className="flex items-center gap-1 text-red-500">
+                            <AlertCircle className="w-3 h-3" />
+                            {campaign.failedCount} failed
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {format(new Date(campaign.createdAt), 'MMM d, yyyy')}
+                        </span>
+                      </div>
+                    </div>
 
-                <div className="flex items-center gap-2">
-                  {campaign.status === 'DRAFT' && (
-                    <Button
-                      size="sm"
-                      icon={<Play className="w-4 h-4" />}
-                      onClick={() => handleExecute(campaign.id)}
-                      loading={executing}
-                      disabled={!smtpAccount}
-                    >
-                      Execute
-                    </Button>
-                  )}
-                  {campaign.status === 'SCHEDULED' && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      icon={<XCircle className="w-4 h-4" />}
-                      onClick={() => handleCancel(campaign.id)}
-                    >
-                      Cancel
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    icon={<Eye className="w-4 h-4" />}
-                    onClick={() => handleViewLogs(campaign)}
-                  >
-                    Logs
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
-      </>
+                    <div className="flex items-center gap-2 pt-3 sm:pt-0 border-t sm:border-t-0 border-gray-100 dark:border-slate-800 sm:justify-end">
+                      {campaign.status === 'DRAFT' && (
+                        <Button
+                          size="sm"
+                          icon={<Play className="w-4 h-4" />}
+                          onClick={() => handleExecute(campaign.id)}
+                          loading={executing}
+                          disabled={!smtpAccount}
+                        >
+                          Execute
+                        </Button>
+                      )}
+                      {campaign.status === 'SCHEDULED' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          icon={<XCircle className="w-4 h-4" />}
+                          onClick={() => handleCancel(campaign.id)}
+                        >
+                          Cancel
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        icon={<Eye className="w-4 h-4" />}
+                        onClick={() => handleViewLogs(campaign)}
+                      >
+                        Logs
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </>
       ) : (
         <>
           {/* History List */}
           {logsLoading && logs.length === 0 ? (
             <div className="flex items-center justify-center h-64">
-              <Spinner size="lg" />
+              <LoadingSpinner message="Loading history..." />
             </div>
           ) : logs.length === 0 ? (
             <EmptyState
@@ -381,10 +379,10 @@ Best regards`;
           ) : (
             <div className="space-y-4">
               {logs.map((log) => (
-                <LogEntry 
-                  key={log.id} 
-                  log={log} 
-                  onClick={() => handleViewLogDetails(log)} 
+                <LogEntry
+                  key={log.id}
+                  log={log}
+                  onClick={() => handleViewLogDetails(log)}
                 />
               ))}
             </div>
@@ -498,7 +496,7 @@ Best regards`;
       >
         {logsLoading ? (
           <div className="flex items-center justify-center py-8">
-            <Spinner size="lg" />
+            <LoadingSpinner size="md" message="Fetching logs..." showMessage={true} />
           </div>
         ) : logs.length === 0 ? (
           <EmptyState
@@ -523,60 +521,68 @@ Best regards`;
       <Modal
         isOpen={modal.isOpen && modal.type === 'editDraft'}
         onClose={() => {
-            // Re-open logs modal to act as "back"
-            if (selectedCampaign) {
-                dispatch(openModal({ type: 'viewLogs', data: selectedCampaign }));
-            } else {
-                dispatch(closeModal());
-            }
-            setSelectedLog(null);
+          // Re-open logs modal to act as "back"
+          if (selectedCampaign) {
+            dispatch(openModal({ type: 'viewLogs', data: selectedCampaign }));
+          } else {
+            dispatch(closeModal());
+          }
+          setSelectedLog(null);
         }}
         title={`Review Email - ${selectedLog?.professorName || selectedLog?.recipientEmail}`}
         size="lg"
       >
-        <div className="space-y-4">
-            <div>
-                <p className="text-sm font-medium text-gray-700">To: {selectedLog?.recipientEmail}</p>
-                <p className="text-sm text-gray-500">Subject: {selectedLog?.subject}</p>
+        <div className="space-y-4 relative min-h-[400px]">
+          {isRegenerating && (
+            <div className="absolute inset-0 z-10 bg-white/80 backdrop-blur-sm flex items-center justify-center rounded-lg">
+              <LoadingSpinner message="Generating email with AI..." />
             </div>
-            
-            <Textarea
-                label="Email Body"
-                value={draftBody}
-                onChange={(e) => setDraftBody(e.target.value)}
-                rows={12}
+          )}
+          <div>
+            <p className="text-sm font-medium text-gray-700 dark:text-slate-300">To: {selectedLog?.recipientEmail}</p>
+            <p className="text-sm text-gray-500 dark:text-slate-400">Subject: {selectedLog?.subject}</p>
+          </div>
+
+          <Textarea
+            label="Email Body"
+            value={draftBody}
+            onChange={(e) => setDraftBody(e.target.value)}
+            rows={12}
+            disabled={selectedLog?.status === 'SENT' || isRegenerating}
+          />
+
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center pt-4 gap-4">
+            <Button
+              variant="outline"
+              icon={<RefreshCw className="w-4 h-4" />}
+              onClick={handleRegenerateDraft}
+              loading={isRegenerating}
+              disabled={selectedLog?.status === 'SENT'}
+              className="w-full sm:w-auto"
+            >
+              Regenerate with AI
+            </Button>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button
+                variant="outline"
+                onClick={handleSaveDraft}
                 disabled={selectedLog?.status === 'SENT'}
-            />
-
-            <div className="flex justify-between items-center pt-4">
-                <Button
-                    variant="outline"
-                    icon={<RefreshCw className="w-4 h-4" />}
-                    onClick={handleRegenerateDraft}
-                    loading={isRegenerating}
-                    disabled={selectedLog?.status === 'SENT'}
-                >
-                    Regenerate with AI
-                </Button>
-
-                <div className="flex gap-2">
-                    <Button
-                        variant="outline"
-                        onClick={handleSaveDraft}
-                        disabled={selectedLog?.status === 'SENT'}
-                    >
-                        Save Draft
-                    </Button>
-                    <Button
-                        icon={<Send className="w-4 h-4" />}
-                        onClick={handleSendIndividual}
-                        loading={isSending}
-                        disabled={!smtpAccount || selectedLog?.status === 'SENT'}
-                    >
-                        Send Now
-                    </Button>
-                </div>
+                className="w-full sm:w-auto"
+              >
+                Save Draft
+              </Button>
+              <Button
+                icon={<Send className="w-4 h-4" />}
+                onClick={handleSendIndividual}
+                loading={isSending}
+                disabled={!smtpAccount || selectedLog?.status === 'SENT'}
+                className="w-full sm:w-auto"
+              >
+                Send Now
+              </Button>
             </div>
+          </div>
         </div>
       </Modal>
     </div>
@@ -584,28 +590,30 @@ Best regards`;
 };
 
 const LogEntry: React.FC<{ log: EmailLogResponse; onClick: () => void }> = ({ log, onClick }) => (
-  <div 
-    className="flex items-center justify-between py-3 px-4 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
+  <div
+    className="flex flex-col sm:flex-row sm:items-center justify-between py-3 px-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors gap-3"
     onClick={onClick}
   >
     <div className="flex-1 min-w-0">
       <div className="flex items-center gap-2">
-        <p className="text-sm font-medium text-gray-900 truncate">
-            {log.professorName || log.recipientEmail}
+        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+          {log.professorName || log.recipientEmail}
         </p>
-        <span className="text-xs text-gray-500">({log.recipientEmail})</span>
       </div>
+      <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{log.recipientEmail}</p>
       {log.errorMessage && (
-        <p className="text-xs text-red-500 truncate">{log.errorMessage}</p>
+        <p className="text-xs text-red-500 truncate mt-1">{log.errorMessage}</p>
       )}
     </div>
-    <div className="flex items-center gap-3">
-      {log.sentAt && (
-        <span className="text-xs text-gray-500">
-          {format(new Date(log.sentAt), 'MMM d, HH:mm')}
-        </span>
-      )}
-      <StatusBadge status={log.status} />
+    <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100 dark:border-slate-700">
+      <div className="flex flex-col items-end">
+        <StatusBadge status={log.status} />
+        {log.sentAt && (
+          <span className="text-[10px] text-gray-500 dark:text-slate-400 mt-1">
+            {format(new Date(log.sentAt), 'MMM d, HH:mm')}
+          </span>
+        )}
+      </div>
       <Edit3 className="w-4 h-4 text-gray-400" />
     </div>
   </div>

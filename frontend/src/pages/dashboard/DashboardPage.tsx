@@ -1,15 +1,14 @@
 import React, { useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { fetchDashboard } from '@/store/slices/tenantSlice';
-import { Card, Spinner, Alert, EmptyState } from '@/components/ui';
+import { Card, LoadingSpinner, Alert, EmptyState } from '@/components/ui';
 import {
   FileText,
   Users,
   Mail,
   Send,
-  AlertTriangle,
-  CheckCircle,
   Clock,
+  CheckCircle,
   XCircle,
   Settings,
 } from 'lucide-react';
@@ -47,7 +46,7 @@ export const DashboardPage: React.FC = () => {
   if (dashboardLoading && !dashboard) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Spinner size="lg" />
+        <LoadingSpinner message="Loading dashboard..." />
       </div>
     );
   }
@@ -97,8 +96,8 @@ export const DashboardPage: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+        <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
           Welcome back! Here's an overview of {currentTenant.name}
         </p>
       </div>
@@ -124,8 +123,8 @@ export const DashboardPage: React.FC = () => {
                 <stat.icon className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                <p className="text-sm text-gray-500">{stat.name}</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stat.value}</p>
+                <p className="text-sm text-gray-500 dark:text-slate-400">{stat.name}</p>
               </div>
             </Card>
           </Link>
@@ -135,7 +134,7 @@ export const DashboardPage: React.FC = () => {
       {/* Campaign Status */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Campaign Status</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Campaign Status</h3>
           <div className="space-y-3">
             <StatusItem
               icon={Clock}
@@ -171,7 +170,7 @@ export const DashboardPage: React.FC = () => {
         </Card>
 
         <Card>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
           <div className="space-y-2">
             <QuickAction
               icon={FileText}
@@ -195,32 +194,32 @@ export const DashboardPage: React.FC = () => {
       {/* Email Stats */}
       {(dashboard?.totalEmailsSent ?? 0) > 0 && (
         <Card>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Email Performance</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Email Performance</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             <div className="text-center">
-              <p className="text-3xl font-bold text-green-600">
+              <p className="text-3xl font-bold text-green-600 dark:text-green-400">
                 {dashboard?.totalEmailsSent ?? 0}
               </p>
-              <p className="text-sm text-gray-500">Sent</p>
+              <p className="text-sm text-gray-500 dark:text-slate-400">Sent</p>
             </div>
             <div className="text-center">
-              <p className="text-3xl font-bold text-red-600">
+              <p className="text-3xl font-bold text-red-600 dark:text-red-400">
                 {dashboard?.totalEmailsFailed ?? 0}
               </p>
-              <p className="text-sm text-gray-500">Failed</p>
+              <p className="text-sm text-gray-500 dark:text-slate-400">Failed</p>
             </div>
             <div className="text-center">
-              <p className="text-3xl font-bold text-primary-600">
+              <p className="text-3xl font-bold text-primary-600 dark:text-primary-400">
                 {dashboard?.totalEmailsSent && dashboard.totalEmailsSent > 0
                   ? (
-                      ((dashboard.totalEmailsSent - (dashboard?.totalEmailsFailed ?? 0)) /
-                        dashboard.totalEmailsSent) *
-                      100
-                    ).toFixed(1)
+                    ((dashboard.totalEmailsSent - (dashboard?.totalEmailsFailed ?? 0)) /
+                      dashboard.totalEmailsSent) *
+                    100
+                  ).toFixed(1)
                   : 0}
                 %
               </p>
-              <p className="text-sm text-gray-500">Success Rate</p>
+              <p className="text-sm text-gray-500 dark:text-slate-400">Success Rate</p>
             </div>
           </div>
         </Card>
@@ -238,9 +237,9 @@ const StatusItem: React.FC<{
   <div className="flex items-center justify-between">
     <div className="flex items-center gap-2">
       <Icon className={`w-4 h-4 ${color}`} />
-      <span className="text-sm text-gray-600">{label}</span>
+      <span className="text-sm text-gray-600 dark:text-slate-400">{label}</span>
     </div>
-    <span className="font-medium text-gray-900">{value}</span>
+    <span className="font-medium text-gray-900 dark:text-white">{value}</span>
   </div>
 );
 
@@ -251,9 +250,9 @@ const QuickAction: React.FC<{
 }> = ({ icon: Icon, label, href }) => (
   <Link
     to={href}
-    className="flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-colors"
+    className="flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 dark:border-slate-800 hover:border-primary-300 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/10 transition-colors"
   >
-    <Icon className="w-5 h-5 text-gray-400" />
-    <span className="text-sm font-medium text-gray-700">{label}</span>
+    <Icon className="w-5 h-5 text-gray-400 dark:text-slate-500" />
+    <span className="text-sm font-medium text-gray-700 dark:text-slate-300">{label}</span>
   </Link>
 );

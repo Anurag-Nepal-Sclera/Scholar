@@ -6,6 +6,7 @@ import { RootState } from '../index';
 interface CVState {
   cvs: CVResponse[];
   currentCV: CVResponse | null;
+  parsingCVId: string | null;
   pagination: {
     page: number;
     size: number;
@@ -20,6 +21,7 @@ interface CVState {
 const initialState: CVState = {
   cvs: [],
   currentCV: null,
+  parsingCVId: null,
   pagination: {
     page: 0,
     size: 10,
@@ -41,7 +43,7 @@ export const fetchCVs = createAsyncThunk(
       if (!tenantId) {
         return rejectWithValue('No tenant selected');
       }
-      
+
       const response = await apiClient.get<ApiResponse<Page<CVResponse>>>('/v1/cvs', {
         params: {
           tenantId,
@@ -50,7 +52,7 @@ export const fetchCVs = createAsyncThunk(
           sort: 'uploadedAt,desc',
         },
       });
-      
+
       if (response.data.success && response.data.data) {
         return response.data.data;
       }
@@ -71,11 +73,11 @@ export const fetchCV = createAsyncThunk(
       if (!tenantId) {
         return rejectWithValue('No tenant selected');
       }
-      
+
       const response = await apiClient.get<ApiResponse<CVResponse>>(`/v1/cvs/${cvId}`, {
         params: { tenantId },
       });
-      
+
       if (response.data.success && response.data.data) {
         return response.data.data;
       }
@@ -96,17 +98,17 @@ export const uploadCV = createAsyncThunk(
       if (!tenantId) {
         return rejectWithValue('No tenant selected');
       }
-      
+
       const formData = new FormData();
       formData.append('file', file);
       formData.append('tenantId', tenantId);
-      
+
       const response = await apiClient.post<ApiResponse<CVResponse>>('/v1/cvs/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
-      
+
       if (response.data.success && response.data.data) {
         return response.data.data;
       }
@@ -127,11 +129,11 @@ export const parseCV = createAsyncThunk(
       if (!tenantId) {
         return rejectWithValue('No tenant selected');
       }
-      
+
       await apiClient.post(`/v1/cvs/${cvId}/parse`, null, {
         params: { tenantId },
       });
-      
+
       return cvId;
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } }; message?: string };
@@ -149,11 +151,11 @@ export const computeMatches = createAsyncThunk(
       if (!tenantId) {
         return rejectWithValue('No tenant selected');
       }
-      
+
       await apiClient.post(`/v1/cvs/${cvId}/compute-matches`, null, {
         params: { tenantId },
       });
-      
+
       return cvId;
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } }; message?: string };
@@ -171,11 +173,11 @@ export const deleteCV = createAsyncThunk(
       if (!tenantId) {
         return rejectWithValue('No tenant selected');
       }
-      
+
       await apiClient.delete(`/v1/cvs/${cvId}`, {
         params: { tenantId },
       });
-      
+
       return cvId;
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } }; message?: string };
@@ -207,6 +209,9 @@ const cvSlice = createSlice({
       if (state.currentCV?.id === action.payload.id) {
         state.currentCV = action.payload;
       }
+    },
+    clearParsingCVId: (state) => {
+      state.parsingCVId = null;
     },
   },
   extraReducers: (builder) => {
@@ -242,6 +247,7 @@ const cvSlice = createSlice({
       .addCase(uploadCV.fulfilled, (state, action) => {
         state.uploading = false;
         state.cvs.unshift(action.payload);
+        state.parsingCVId = action.payload.id;
       })
       .addCase(uploadCV.rejected, (state, action) => {
         state.uploading = false;
@@ -253,9 +259,16 @@ const cvSlice = createSlice({
         if (state.currentCV?.id === action.payload) {
           state.currentCV = null;
         }
+      })
+      // Parse CV
+      .addCase(parseCV.pending, (state, action) => {
+        state.parsingCVId = action.meta.arg;
+      })
+      .addCase(parseCV.rejected, (state) => {
+        state.parsingCVId = null;
       });
   },
 });
 
-export const { setCurrentCV, clearCVError, clearCVState, updateCVInList } = cvSlice.actions;
+export const { setCurrentCV, clearCVError, clearCVState, updateCVInList, clearParsingCVId } = cvSlice.actions;
 export default cvSlice.reducer;

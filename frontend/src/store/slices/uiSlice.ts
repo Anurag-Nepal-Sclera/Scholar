@@ -10,6 +10,7 @@ interface UIState {
   sidebarOpen: boolean;
   modal: ModalState;
   globalLoading: boolean;
+  theme: 'light' | 'dark';
 }
 
 const initialState: UIState = {
@@ -20,6 +21,7 @@ const initialState: UIState = {
     data: undefined,
   },
   globalLoading: false,
+  theme: (localStorage.getItem('theme') as 'light' | 'dark') || 'light',
 };
 
 const uiSlice = createSlice({
@@ -31,6 +33,10 @@ const uiSlice = createSlice({
     },
     setSidebarOpen: (state, action: PayloadAction<boolean>) => {
       state.sidebarOpen = action.payload;
+    },
+    toggleTheme: (state) => {
+      state.theme = state.theme === 'light' ? 'dark' : 'light';
+      localStorage.setItem('theme', state.theme);
     },
     openModal: (state, action: PayloadAction<{ type: string; data?: unknown }>) => {
       state.modal = {
@@ -52,5 +58,5 @@ const uiSlice = createSlice({
   },
 });
 
-export const { toggleSidebar, setSidebarOpen, openModal, closeModal, setGlobalLoading } = uiSlice.actions;
+export const { toggleSidebar, setSidebarOpen, openModal, closeModal, setGlobalLoading, toggleTheme } = uiSlice.actions;
 export default uiSlice.reducer;

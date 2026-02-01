@@ -10,7 +10,7 @@ export const RegisterPage: React.FC = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { loading, error } = useAppSelector((state) => state.auth);
-  
+
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -22,7 +22,7 @@ export const RegisterPage: React.FC = () => {
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
-    
+
     if (!formData.firstName.trim()) {
       newErrors.firstName = 'First name is required';
     }
@@ -42,7 +42,7 @@ export const RegisterPage: React.FC = () => {
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -50,7 +50,7 @@ export const RegisterPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     dispatch(clearError());
-    
+
     if (!validate()) return;
 
     const result = await dispatch(register({
@@ -59,10 +59,10 @@ export const RegisterPage: React.FC = () => {
       email: formData.email,
       password: formData.password,
     }));
-    
+
     if (register.fulfilled.match(result)) {
       if (result.payload.token) {
-        toast.success('Account created! Welcome to Scholar.');
+        toast.success('Account created! Welcome to Acadexis.');
         navigate('/dashboard');
       } else {
         toast.success('Registration successful! Please log in.');
@@ -74,7 +74,7 @@ export const RegisterPage: React.FC = () => {
   return (
     <div>
       <h2 className="text-xl font-semibold text-gray-900 mb-6">Create your account</h2>
-      
+
       {error && (
         <Alert variant="error" className="mb-4">
           {error}
@@ -101,7 +101,7 @@ export const RegisterPage: React.FC = () => {
             autoComplete="family-name"
           />
         </div>
-        
+
         <Input
           label="Email"
           type="email"
@@ -112,7 +112,7 @@ export const RegisterPage: React.FC = () => {
           error={errors.email}
           autoComplete="email"
         />
-        
+
         <Input
           label="Password"
           type="password"
@@ -124,7 +124,7 @@ export const RegisterPage: React.FC = () => {
           hint="Must be at least 8 characters"
           autoComplete="new-password"
         />
-        
+
         <Input
           label="Confirm password"
           type="password"

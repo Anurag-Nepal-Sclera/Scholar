@@ -8,7 +8,7 @@ import {
   CardHeader,
   Button,
   Input,
-  Spinner,
+  LoadingSpinner,
   Alert,
   StatusBadge,
   Modal,
@@ -137,8 +137,8 @@ export const SettingsPage: React.FC = () => {
     <div className="space-y-8 max-w-4xl">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Configuration</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Configuration</h1>
+        <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
           Manage your students and SMTP configuration
         </p>
       </div>
@@ -162,7 +162,7 @@ export const SettingsPage: React.FC = () => {
 
           {tenantsLoading && tenants.length === 0 ? (
             <div className="flex items-center justify-center py-8">
-              <Spinner />
+              <LoadingSpinner size="md" message="Loading students..." showMessage={true} />
             </div>
           ) : tenants.length === 0 ? (
             <EmptyState
@@ -178,8 +178,8 @@ export const SettingsPage: React.FC = () => {
                   className={clsx(
                     'flex items-center justify-between p-3 rounded-lg border transition-colors',
                     currentTenant?.id === tenant.id
-                      ? 'border-primary-500 bg-primary-50'
-                      : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/10'
+                      : 'border-gray-200 dark:border-slate-800 hover:border-gray-300 dark:hover:border-slate-700'
                   )}
                 >
                   <div className="flex items-center gap-3">
@@ -187,15 +187,15 @@ export const SettingsPage: React.FC = () => {
                       className={clsx(
                         'w-10 h-10 rounded-lg flex items-center justify-center',
                         currentTenant?.id === tenant.id
-                          ? 'bg-primary-500 text-white'
-                          : 'bg-gray-100 text-gray-500'
+                          ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20'
+                          : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500'
                       )}
                     >
                       <Building2 className="w-5 h-5" />
                     </div>
                     <div>
-                      <p className="font-medium text-gray-900">{tenant.name}</p>
-                      <p className="text-sm text-gray-500">{tenant.email}</p>
+                      <p className="font-medium text-gray-900 dark:text-white">{tenant.name}</p>
+                      <p className="text-sm text-gray-500 dark:text-slate-400">{tenant.email}</p>
                     </div>
                   </div>
 
@@ -211,7 +211,7 @@ export const SettingsPage: React.FC = () => {
                       </Button>
                     )}
                     {currentTenant?.id === tenant.id && (
-                      <span className="flex items-center gap-1 text-sm text-primary-600">
+                      <span className="flex items-center gap-1 text-sm text-primary-600 dark:text-primary-400 font-medium">
                         <Check className="w-4 h-4" />
                         Active
                       </span>
@@ -220,7 +220,7 @@ export const SettingsPage: React.FC = () => {
                       size="sm"
                       variant="ghost"
                       icon={<Trash2 className="w-4 h-4" />}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/10"
                       onClick={() => {
                         setDeletingTenant(tenant);
                         dispatch(openModal({ type: 'deleteTenant' }));
@@ -248,7 +248,7 @@ export const SettingsPage: React.FC = () => {
             </Alert>
           ) : smtpLoading ? (
             <div className="flex items-center justify-center py-8">
-              <Spinner />
+              <LoadingSpinner size="md" message="Fetching SMTP settings..." showMessage={true} />
             </div>
           ) : (
             <div className="space-y-6">
@@ -325,23 +325,23 @@ export const SettingsPage: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-6">
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className="flex items-center gap-2 cursor-pointer group">
                   <input
                     type="checkbox"
                     checked={smtpForm.useTls}
                     onChange={(e) => setSmtpForm({ ...smtpForm, useTls: e.target.checked })}
-                    className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    className="w-4 h-4 rounded border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-primary-600 focus:ring-primary-500"
                   />
-                  <span className="text-sm text-gray-700">Use TLS</span>
+                  <span className="text-sm text-gray-700 dark:text-slate-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">Use TLS</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className="flex items-center gap-2 cursor-pointer group">
                   <input
                     type="checkbox"
                     checked={smtpForm.useSsl}
                     onChange={(e) => setSmtpForm({ ...smtpForm, useSsl: e.target.checked })}
-                    className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    className="w-4 h-4 rounded border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-primary-600 focus:ring-primary-500"
                   />
-                  <span className="text-sm text-gray-700">Use SSL</span>
+                  <span className="text-sm text-gray-700 dark:text-slate-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">Use SSL</span>
                 </label>
               </div>
 
@@ -350,7 +350,7 @@ export const SettingsPage: React.FC = () => {
                   <Button
                     variant="outline"
                     onClick={handleDeactivateSmtp}
-                    className="text-red-600 hover:text-red-700"
+                    className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                   >
                     Deactivate
                   </Button>
@@ -426,7 +426,7 @@ export const SettingsPage: React.FC = () => {
         <Alert variant="error" className="mb-4">
           This action cannot be undone. All CVs, matches, and campaigns will be permanently deleted.
         </Alert>
-        <p className="text-gray-600 mb-6">
+        <p className="text-gray-600 dark:text-slate-300 mb-6">
           Are you sure you want to delete <strong>{deletingTenant?.name}</strong>?
         </p>
         <div className="flex justify-end gap-3">

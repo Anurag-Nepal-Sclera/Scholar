@@ -8,3 +8,4 @@ export { Alert } from './Alert';
 export { EmptyState } from './EmptyState';
 export { Select } from './Select';
 export { Textarea } from './Textarea';
+export * from './LoadingSpinner';

@@ -26,9 +26,9 @@ export const Card: React.FC<CardProps> = ({
   return (
     <div
       className={clsx(
-        'bg-white rounded-xl border border-gray-200 shadow-sm',
+        'bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 shadow-sm transition-colors duration-200',
         paddings[padding],
-        hover && 'hover:shadow-md hover:border-gray-300 transition-all duration-200 cursor-pointer',
+        hover && 'hover:shadow-md hover:border-gray-300 dark:hover:border-slate-600 transition-all duration-200 cursor-pointer',
         onClick && 'cursor-pointer',
         className
       )}
@@ -48,9 +48,9 @@ interface CardHeaderProps {
 export const CardHeader: React.FC<CardHeaderProps> = ({ title, description, action }) => (
   <div className="flex items-start justify-between mb-4">
     <div>
-      <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
       {description && (
-        <p className="mt-1 text-sm text-gray-500">{description}</p>
+        <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">{description}</p>
       )}
     </div>
     {action && <div>{action}</div>}

@@ -17,29 +17,32 @@ import { SettingsPage } from './pages/settings';
 // Protected Route wrapper
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAuthenticated = store.getState().auth.isAuthenticated;
-  
+
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
-  
+
   return <>{children}</>;
 };
 
 // Public Route wrapper (redirects to dashboard if already authenticated)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAuthenticated = store.getState().auth.isAuthenticated;
-  
+
   if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />;
   }
-  
+
   return <>{children}</>;
 };
+
+import { ThemeWatcher } from './components/layout/ThemeWatcher';
 
 const App: React.FC = () => {
   return (
     <Provider store={store}>
       <PersistGate loading={<LoadingPage />} persistor={persistor}>
+        <ThemeWatcher />
         <BrowserRouter>
           <Routes>
             {/* Public routes */}

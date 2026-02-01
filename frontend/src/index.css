@@ -116,3 +116,20 @@ input:-webkit-autofill:focus {
   background-size: 200% 100%;
   animation: skeleton-loading 1.5s ease-in-out infinite;
 }
+
+/* Custom UI Utilities */
+.gradient-primary {
+  @apply bg-gradient-to-br from-primary-500 to-primary-700;
+}
+
+.shadow-glow {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+}
+
+.text-primary-foreground {
+  @apply text-white;
+}
+
+.text-muted-foreground {
+  @apply text-gray-500;
+}
