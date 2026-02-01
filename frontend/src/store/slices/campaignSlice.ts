@@ -231,6 +231,38 @@ export const fetchCampaignLogs = createAsyncThunk(
   }
 );
 
+export const fetchTenantLogs = createAsyncThunk(
+  'campaign/fetchTenantLogs',
+  async (params: { page?: number; size?: number }, { getState, rejectWithValue }) => {
+    try {
+      const state = getState() as RootState;
+      const tenantId = state.tenant.currentTenant?.id;
+      if (!tenantId) {
+        return rejectWithValue('No tenant selected');
+      }
+      
+      const response = await apiClient.get<ApiResponse<Page<EmailLogResponse>>>(
+        '/v1/campaigns/logs',
+        {
+          params: {
+            tenantId,
+            page: params.page ?? 0,
+            size: params.size ?? 20,
+          },
+        }
+      );
+      
+      if (response.data.success && response.data.data) {
+        return response.data.data;
+      }
+      return rejectWithValue(response.data.message || 'Failed to fetch logs');
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } }; message?: string };
+      return rejectWithValue(err.response?.data?.message || err.message || 'Failed to fetch logs');
+    }
+  }
+);
+
 export const updateEmailDraft = createAsyncThunk(
   'campaign/updateEmailDraft',
   async (params: { logId: string; body: string }, { getState, rejectWithValue }) => {
@@ -399,6 +431,24 @@ const campaignSlice = createSlice({
         };
       })
       .addCase(fetchCampaignLogs.rejected, (state, action) => {
+        state.logsLoading = false;
+        state.error = action.payload as string;
+      })
+      // Fetch tenant logs
+      .addCase(fetchTenantLogs.pending, (state) => {
+        state.logsLoading = true;
+      })
+      .addCase(fetchTenantLogs.fulfilled, (state, action) => {
+        state.logsLoading = false;
+        state.logs = action.payload.content;
+        state.logsPagination = {
+          page: action.payload.number,
+          size: action.payload.size,
+          totalElements: action.payload.totalElements,
+          totalPages: action.payload.totalPages,
+        };
+      })
+      .addCase(fetchTenantLogs.rejected, (state, action) => {
         state.logsLoading = false;
         state.error = action.payload as string;
       })

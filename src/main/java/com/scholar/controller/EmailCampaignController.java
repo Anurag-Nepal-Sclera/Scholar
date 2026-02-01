@@ -151,6 +151,45 @@ public class EmailCampaignController {
         }
     }
 
+    @GetMapping("/logs")
+    @Operation(summary = "Get all logs", description = "Retrieve all email logs for a tenant")
+    public ResponseEntity<ApiResponse<Page<EmailLogResponse>>> getAllLogs(
+        @RequestParam UUID tenantId,
+        @Parameter(hidden = true) Pageable pageable
+    ) {
+        try {
+            securityUtils.validateTenantOwnership(tenantId);
+            Page<EmailLog> logs = campaignService.getAllTenantLogs(tenantId, pageable);
+            Page<EmailLogResponse> response = logs.map(this::toLogResponse);
+            return ResponseEntity.ok(ApiResponse.success(response));
+        } catch (Exception e) {
+            log.error("Failed to get all logs", e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("Failed to retrieve logs: " + e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/{campaignId}")
+    @Operation(summary = "Delete campaign", description = "Delete a campaign and all associated email logs")
+    public ResponseEntity<ApiResponse<String>> deleteCampaign(
+        @PathVariable UUID campaignId,
+        @RequestParam UUID tenantId
+    ) {
+        try {
+            securityUtils.validateTenantOwnership(tenantId);
+            campaignService.deleteCampaign(campaignId, tenantId);
+            return ResponseEntity.ok(ApiResponse.success("Campaign deleted successfully"));
+        } catch (IllegalStateException e) {
+            log.error("Cannot delete campaign", e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("Failed to delete campaign", e);
+            return ResponseEntity.badRequest()
+                .body(ApiResponse.error("Failed to delete campaign: " + e.getMessage()));
+        }
+    }
+
     @GetMapping("/{campaignId}/logs")
     @Operation(summary = "Get campaign logs", description = "Retrieve email logs for a campaign")
     public ResponseEntity<ApiResponse<Page<EmailLogResponse>>> getCampaignLogs(

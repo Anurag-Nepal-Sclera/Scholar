@@ -104,8 +104,8 @@ export const CVsPage: React.FC = () => {
   if (!currentTenant) {
     return (
       <EmptyState
-        title="No organization selected"
-        description="Please select an organization to manage CVs."
+        title="No student selected"
+        description="Please select a student to manage CVs."
       />
     );
   }

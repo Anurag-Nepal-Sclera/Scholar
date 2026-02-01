@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -108,13 +109,30 @@ public class EmailCampaignService {
     @Transactional
     public void createAutoCampaign(UUID cvId, UUID tenantId) {
         CV cv = cvRepository.findById(cvId).orElseThrow();
-        BigDecimal autoThreshold = new BigDecimal("0.01"); // Lowered to 0.01 for testing/demo purposes
+        UUID tenantIdFromCv = cv.getTenant().getId();
+        
+        // Prevent duplicate auto-campaigns for the same CV
+        List<EmailCampaign> existingCampaigns = campaignRepository.findAllByCvId(cvId);
+        boolean hasAutoCampaign = existingCampaigns.stream()
+            .anyMatch(c -> c.getName().startsWith("AI-Outreach:"));
+        
+        if (hasAutoCampaign) {
+            log.info("Auto-campaign already exists for CV {}. Skipping creation.", cvId);
+            return;
+        }
+
+        BigDecimal autoThreshold = new BigDecimal("0.40"); // Default min score
         String campaignName = "AI-Outreach: " + cv.getOriginalFilename() + " (" + LocalDateTime.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE) + ")";
         
         EmailCampaign campaign = createCampaign(tenantId, cvId, campaignName, "Research Inquiry: " + cv.getOriginalFilename(), "AI_GENERATED", autoThreshold);
         
-        // Initialize logs immediately so they are visible in Matches tab
-        List<MatchResult> matches = matchResultRepository.findByCvIdAndTenantIdAndMinScore(cvId, tenantId, autoThreshold);
+        // Initialize logs with TOP 50 matches (instead of top 5 or all \u003e threshold)
+        Pageable top50 = PageRequest.of(0, 50);
+        List<MatchResult> matches = matchResultRepository.findByCvIdAndTenantIdOrderByScoreDesc(cvId, tenantId, top50).getContent();
+        
+        // Update campaign recipient count to reflect actual selected matches
+        campaign.setTotalRecipients(matches.size());
+        campaignRepository.save(campaign);
         
         if (!matches.isEmpty()) {
             List<UUID> logIds = initializeEmailLogs(campaign.getId(), matches);
@@ -135,7 +153,7 @@ public class EmailCampaignService {
                 self.generateDraftsForCampaign(campaign.getId(), logIds);
             }
         } else {
-            log.info("No matches found above threshold for auto-campaign. Campaign created but empty.");
+            log.info("No matches found for auto-campaign. Campaign created but empty.");
         }
     }
 
@@ -453,4 +471,24 @@ public class EmailCampaignService {
 
     @Transactional(readOnly = true)
     public Page<EmailLog> getCampaignLogs(UUID id, Pageable p) { return emailLogRepository.findByCampaignId(id, p); }
+
+    @Transactional(readOnly = true)
+    public Page<EmailLog> getAllTenantLogs(UUID tenantId, Pageable p) { return emailLogRepository.findByTenantId(tenantId, p); }
+
+    /**
+     * Deletes a campaign and all associated email logs (cascade delete).
+     */
+    @Transactional
+    public void deleteCampaign(UUID campaignId, UUID tenantId) {
+        EmailCampaign campaign = getCampaign(campaignId, tenantId);
+        
+        // Only allow deletion of campaigns that are not currently executing
+        if (campaign.getStatus() == EmailCampaign.CampaignStatus.IN_PROGRESS) {
+            throw new IllegalStateException("Cannot delete a campaign that is currently in progress");
+        }
+        
+        // Email logs will be cascade deleted automatically due to CascadeType.ALL on the entity
+        campaignRepository.delete(campaign);
+        log.info("Deleted campaign {} and its associated email logs for tenant {}", campaignId, tenantId);
+    }
 }

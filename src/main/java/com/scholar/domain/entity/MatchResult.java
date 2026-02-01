@@ -67,6 +67,4 @@ public class MatchResult {
     @Column(name = "computed_at", nullable = false, updatable = false)
     private LocalDateTime computedAt;
 
-    @OneToOne(mappedBy = "matchResult", fetch = FetchType.LAZY)
-    private EmailLog emailLog;
 }

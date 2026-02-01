@@ -80,8 +80,8 @@ export const MatchesPage: React.FC = () => {
   if (!currentTenant) {
     return (
       <EmptyState
-        title="No organization selected"
-        description="Please select an organization to view matches."
+        title="No student selected"
+        description="Please select a student to view matches."
       />
     );
   }
