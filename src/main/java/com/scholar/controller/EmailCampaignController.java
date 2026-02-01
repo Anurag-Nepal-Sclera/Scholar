@@ -192,12 +192,14 @@ public class EmailCampaignController {
             .id(log.getId())
             .recipientEmail(log.getRecipientEmail())
             .subject(log.getSubject())
+            .body(log.getBody()) // Added body
             .status(log.getStatus().name())
             .errorMessage(log.getErrorMessage())
             .retryCount(log.getRetryCount())
             .sentAt(log.getSentAt())
             .createdAt(log.getCreatedAt())
             .professorId(log.getProfessor().getId())
+            .professorName(log.getProfessor().getFirstName() + " " + log.getProfessor().getLastName()) // Added professor name
             .build();
     }
 }

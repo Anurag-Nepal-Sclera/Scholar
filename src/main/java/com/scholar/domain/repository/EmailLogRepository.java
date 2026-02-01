@@ -34,4 +34,6 @@ public interface EmailLogRepository extends JpaRepository<EmailLog, UUID> {
 
     @Query("SELECT COUNT(e) FROM EmailLog e WHERE e.tenant.id = :tenantId AND e.status = :status")
     long countByTenantIdAndStatus(@Param("tenantId") UUID tenantId, @Param("status") EmailLog.EmailStatus status);
+
+    boolean existsByEmailCampaignIdAndProfessorId(UUID emailCampaignId, UUID professorId);
 }

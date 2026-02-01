@@ -54,6 +54,9 @@ public class Professor {
     @Column(name = "research_area", columnDefinition = "TEXT")
     private String researchArea;
 
+    @Column(name = "publications", columnDefinition = "TEXT")
+    private String publications; // Comma or newline separated list of recent paper titles
+
     @Column(name = "profile_url", length = 1000)
     private String profileUrl;
 

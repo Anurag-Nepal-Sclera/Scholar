@@ -1,5 +1,6 @@
 package com.scholar.service.email;
 
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import com.scholar.domain.entity.*;
 import com.scholar.domain.repository.*;
 import com.scholar.service.cv.OpenRouterService;
@@ -75,7 +76,13 @@ public class EmailCampaignService {
      */
     @Transactional
     public EmailCampaign createCampaign(UUID tenantId, UUID cvId, String name, String subject, String bodyTemplate, BigDecimal minMatchScore) {
-        SmtpAccount smtpAccount = smtpAccountService.getActiveSmtpAccount(tenantId);
+        // Handle optional SMTP account
+        SmtpAccount smtpAccount = smtpAccountService.findActiveSmtpAccount(tenantId).orElse(null);
+        
+        if (smtpAccount == null) {
+            log.warn("No active SMTP account found for tenant {}. Campaign will be created without SMTP config.", tenantId);
+        }
+
         CV cv = cvRepository.findById(cvId).orElseThrow();
         
         List<MatchResult> matches = matchResultRepository.findByCvIdAndTenantIdAndMinScore(cvId, tenantId, minMatchScore);
@@ -101,10 +108,80 @@ public class EmailCampaignService {
     @Transactional
     public void createAutoCampaign(UUID cvId, UUID tenantId) {
         CV cv = cvRepository.findById(cvId).orElseThrow();
-        BigDecimal autoThreshold = new BigDecimal("0.60");
+        BigDecimal autoThreshold = new BigDecimal("0.01"); // Lowered to 0.01 for testing/demo purposes
         String campaignName = "AI-Outreach: " + cv.getOriginalFilename() + " (" + LocalDateTime.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE) + ")";
         
-        createCampaign(tenantId, cvId, campaignName, "Research Inquiry regarding interests matching your recent work", "AI_GENERATED", autoThreshold);
+        EmailCampaign campaign = createCampaign(tenantId, cvId, campaignName, "Research Inquiry: " + cv.getOriginalFilename(), "AI_GENERATED", autoThreshold);
+        
+        // Initialize logs immediately so they are visible in Matches tab
+        List<MatchResult> matches = matchResultRepository.findByCvIdAndTenantIdAndMinScore(cvId, tenantId, autoThreshold);
+        
+        if (!matches.isEmpty()) {
+            List<UUID> logIds = initializeEmailLogs(campaign.getId(), matches);
+            
+            // Log for debugging
+            log.info("Initialized {} email logs for campaign {}. Triggering draft generation...", logIds.size(), campaign.getId());
+            
+            // Trigger async generation of email drafts
+            // Using a lambda or ensuring 'self' proxy is used correctly to spawn async task
+            if (TransactionSynchronizationManager.isActualTransactionActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        self.generateDraftsForCampaign(campaign.getId(), logIds);
+                    }
+                });
+            } else {
+                self.generateDraftsForCampaign(campaign.getId(), logIds);
+            }
+        } else {
+            log.info("No matches found above threshold for auto-campaign. Campaign created but empty.");
+        }
+    }
+
+    @Async
+    @Transactional
+    public void generateDraftsForCampaign(UUID campaignId, List<UUID> emailLogIds) {
+        log.info("Starting async email draft generation for campaign: {}", campaignId);
+        try {
+            // Need to reload entities in new transaction context
+            EmailCampaign campaign = campaignRepository.findById(campaignId).orElseThrow();
+            List<CvKeyword> studentKeywords = cvKeywordRepository.findByCvId(campaign.getCv().getId());
+            String keywordsStr = studentKeywords.stream().map(CvKeyword::getKeyword).collect(Collectors.joining(", "));
+
+            for (UUID logId : emailLogIds) {
+                try {
+                    EmailLog emailLog = emailLogRepository.findById(logId).orElseThrow();
+                    
+                    // Skip if already generated (unless it was a placeholder)
+                    if (emailLog.getBody() != null && !emailLog.getBody().isEmpty() && !emailLog.getBody().equals("AI_GENERATED")) {
+                        continue; 
+                    }
+
+                    Professor professor = emailLog.getProfessor();
+                    
+                    List<String> options = openRouterService.generateOutreachEmailOptions(
+                        keywordsStr,
+                        professor.getFirstName() + " " + professor.getLastName(),
+                        professor.getUniversity().getName(),
+                        emailLog.getMatchResult().getMatchedKeywords(),
+                        professor.getPublications() // Pass publications here!
+                    );
+
+                    if (!options.isEmpty()) {
+                        emailLog.setBody(options.get(0));
+                        emailLog.setAlternateBodies(String.join("###SPLIT###", options));
+                        emailLogRepository.save(emailLog);
+                        log.debug("Generated and saved email draft for log: {}", logId);
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to generate draft for log: {}", logId, e);
+                }
+            }
+            log.info("Completed email draft generation for campaign: {}", campaignId);
+        } catch (Exception e) {
+            log.error("Fatal error in draft generation task for campaign: {}", campaignId, e);
+        }
     }
 
     @Async
@@ -211,8 +288,30 @@ public class EmailCampaignService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public List<UUID> initializeEmailLogs(UUID campaignId, List<MatchResult> matches) {
         EmailCampaign campaign = campaignRepository.findById(campaignId).orElseThrow();
-        List<EmailLog> logs = matches.stream().map(m -> createEmailLog(campaign, m)).collect(Collectors.toList());
-        return emailLogRepository.saveAll(logs).stream().map(EmailLog::getId).collect(Collectors.toList());
+        
+        List<EmailLog> logsToSave = new ArrayList<>();
+        Set<UUID> processedProfessorIds = new HashSet<>();
+
+        for (MatchResult match : matches) {
+            Professor professor = match.getProfessor();
+            // 1. Deduplication within the current batch
+            if (processedProfessorIds.contains(professor.getId())) {
+                continue; 
+            }
+            
+            // 2. Check existence in DB to avoid unique constraint violation
+            boolean exists = emailLogRepository.existsByEmailCampaignIdAndProfessorId(campaignId, professor.getId());
+            if (!exists) {
+                logsToSave.add(createEmailLog(campaign, match));
+                processedProfessorIds.add(professor.getId());
+            }
+        }
+
+        if (logsToSave.isEmpty()) {
+            return List.of();
+        }
+
+        return emailLogRepository.saveAll(logsToSave).stream().map(EmailLog::getId).collect(Collectors.toList());
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -277,6 +376,80 @@ public class EmailCampaignService {
     
     @Transactional(readOnly = true)
     public Page<EmailCampaign> getAllCampaigns(UUID tid, Pageable p) { return campaignRepository.findAllByTenantId(tid, p); }
+
+    @Transactional(readOnly = true)
+    public EmailLog getEmailLog(UUID logId) {
+        return emailLogRepository.findById(logId)
+            .orElseThrow(() -> new IllegalArgumentException("Email log not found: " + logId));
+    }
+
+    @Transactional
+    public EmailLog updateEmailLogBody(UUID logId, String body, UUID tenantId) {
+        EmailLog emailLog = getEmailLog(logId);
+        if (!emailLog.getTenant().getId().equals(tenantId)) {
+            throw new SecurityException("Access denied");
+        }
+        emailLog.setBody(body);
+        return emailLogRepository.save(emailLog);
+    }
+
+    @Transactional
+    public EmailLog regenerateEmailLog(UUID logId, UUID tenantId) {
+        EmailLog emailLog = getEmailLog(logId);
+        if (!emailLog.getTenant().getId().equals(tenantId)) {
+            throw new SecurityException("Access denied");
+        }
+        
+        EmailCampaign campaign = emailLog.getEmailCampaign();
+        List<CvKeyword> studentKeywords = cvKeywordRepository.findByCvId(campaign.getCv().getId());
+        String keywordsStr = studentKeywords.stream().map(CvKeyword::getKeyword).collect(Collectors.joining(", "));
+        Professor professor = emailLog.getProfessor();
+
+        List<String> options = openRouterService.generateOutreachEmailOptions(
+            keywordsStr,
+            professor.getFirstName() + " " + professor.getLastName(),
+            professor.getUniversity().getName(),
+            emailLog.getMatchResult().getMatchedKeywords(),
+            professor.getPublications()
+        );
+
+        if (!options.isEmpty()) {
+            emailLog.setBody(options.get(0));
+            emailLog.setAlternateBodies(String.join("###SPLIT###", options));
+            return emailLogRepository.save(emailLog);
+        }
+        
+        throw new RuntimeException("Failed to regenerate email");
+    }
+
+    @Transactional
+    public void sendIndividualEmail(UUID logId, UUID tenantId) {
+        EmailLog emailLog = getEmailLog(logId);
+        if (!emailLog.getTenant().getId().equals(tenantId)) {
+            throw new SecurityException("Access denied");
+        }
+        
+        EmailCampaign campaign = emailLog.getEmailCampaign();
+        byte[] cvFile;
+        try {
+            cvFile = fileStorageService.retrieveFile(campaign.getCv().getFilePath());
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to retrieve CV file", e);
+        }
+        String fileName = campaign.getCv().getOriginalFilename();
+        
+        SmtpAccount smtpAccount = campaign.getSmtpAccount();
+        JavaMailSender mailSender = createMailSender(smtpAccount);
+        
+        boolean success = sendAndUpdateLog(logId, emailLog.getBody(), cvFile, fileName, mailSender, smtpAccount);
+        if (!success) {
+            throw new RuntimeException("Failed to send email");
+        }
+        
+        // Update campaign counters
+        campaign.setSentCount(campaign.getSentCount() + 1);
+        campaignRepository.save(campaign);
+    }
 
     @Transactional(readOnly = true)
     public Page<EmailLog> getCampaignLogs(UUID id, Pageable p) { return emailLogRepository.findByCampaignId(id, p); }

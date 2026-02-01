@@ -231,6 +231,87 @@ export const fetchCampaignLogs = createAsyncThunk(
   }
 );
 
+export const updateEmailDraft = createAsyncThunk(
+  'campaign/updateEmailDraft',
+  async (params: { logId: string; body: string }, { getState, rejectWithValue }) => {
+    try {
+      const state = getState() as RootState;
+      const tenantId = state.tenant.currentTenant?.id;
+      if (!tenantId) {
+        return rejectWithValue('No tenant selected');
+      }
+      
+      const response = await apiClient.put<ApiResponse<EmailLogResponse>>(
+        `/v1/logs/${params.logId}`,
+        { body: params.body },
+        { params: { tenantId } }
+      );
+      
+      if (response.data.success && response.data.data) {
+        return response.data.data;
+      }
+      return rejectWithValue(response.data.message || 'Failed to update draft');
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } }; message?: string };
+      return rejectWithValue(err.response?.data?.message || err.message || 'Failed to update draft');
+    }
+  }
+);
+
+export const regenerateEmailDraft = createAsyncThunk(
+  'campaign/regenerateEmailDraft',
+  async (logId: string, { getState, rejectWithValue }) => {
+    try {
+      const state = getState() as RootState;
+      const tenantId = state.tenant.currentTenant?.id;
+      if (!tenantId) {
+        return rejectWithValue('No tenant selected');
+      }
+      
+      const response = await apiClient.post<ApiResponse<EmailLogResponse>>(
+        `/v1/logs/${logId}/regenerate`,
+        null,
+        { params: { tenantId } }
+      );
+      
+      if (response.data.success && response.data.data) {
+        return response.data.data;
+      }
+      return rejectWithValue(response.data.message || 'Failed to regenerate draft');
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } }; message?: string };
+      return rejectWithValue(err.response?.data?.message || err.message || 'Failed to regenerate draft');
+    }
+  }
+);
+
+export const sendIndividualEmail = createAsyncThunk(
+  'campaign/sendIndividualEmail',
+  async (logId: string, { getState, rejectWithValue }) => {
+    try {
+      const state = getState() as RootState;
+      const tenantId = state.tenant.currentTenant?.id;
+      if (!tenantId) {
+        return rejectWithValue('No tenant selected');
+      }
+      
+      const response = await apiClient.post<ApiResponse<string>>(
+        `/v1/logs/${logId}/send`,
+        null,
+        { params: { tenantId } }
+      );
+      
+      if (response.data.success) {
+        return logId;
+      }
+      return rejectWithValue(response.data.message || 'Failed to send email');
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } }; message?: string };
+      return rejectWithValue(err.response?.data?.message || err.message || 'Failed to send email');
+    }
+  }
+);
+
 const campaignSlice = createSlice({
   name: 'campaign',
   initialState,
@@ -320,6 +401,28 @@ const campaignSlice = createSlice({
       .addCase(fetchCampaignLogs.rejected, (state, action) => {
         state.logsLoading = false;
         state.error = action.payload as string;
+      })
+      // Update draft
+      .addCase(updateEmailDraft.fulfilled, (state, action) => {
+        const index = state.logs.findIndex((l) => l.id === action.payload.id);
+        if (index !== -1) {
+          state.logs[index] = action.payload;
+        }
+      })
+      // Regenerate draft
+      .addCase(regenerateEmailDraft.fulfilled, (state, action) => {
+        const index = state.logs.findIndex((l) => l.id === action.payload.id);
+        if (index !== -1) {
+          state.logs[index] = action.payload;
+        }
+      })
+      // Send individual email
+      .addCase(sendIndividualEmail.fulfilled, (state, action) => {
+        const index = state.logs.findIndex((l) => l.id === action.payload);
+        if (index !== -1) {
+          state.logs[index].status = 'SENT';
+          state.logs[index].sentAt = new Date().toISOString();
+        }
       });
   },
 });

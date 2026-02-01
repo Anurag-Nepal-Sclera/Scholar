@@ -43,8 +43,8 @@ public class EmailCampaign {
     @JoinColumn(name = "cv_id", nullable = false)
     private CV cv;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "smtp_account_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "smtp_account_id")
     private SmtpAccount smtpAccount;
 
     @Column(nullable = false)

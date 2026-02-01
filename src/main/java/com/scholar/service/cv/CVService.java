@@ -199,9 +199,19 @@ public class CVService {
 
             log.info("CV parsing completed successfully: {}. Total keywords saved: {}", cvId, keywords.size());
 
-            // Automatically trigger match computation after successful parsing
+            // Automatically trigger match computation after successful parsing, ensuring transaction commit first
             log.info("Triggering automatic match computation for CV: {}", cvId);
-            matchingService.computeMatches(cvId, cv.getTenant().getId());
+            
+            if (TransactionSynchronizationManager.isActualTransactionActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        matchingService.computeMatches(cvId, cv.getTenant().getId());
+                    }
+                });
+            } else {
+                matchingService.computeMatches(cvId, cv.getTenant().getId());
+            }
         } catch (Exception e) {
             log.error("CV parsing failed for ID: {}. Error: {}", cvId, e.getMessage(), e);
             cvRepository.findById(cvId).ifPresent(cv -> {
@@ -302,17 +312,21 @@ public class CVService {
         // Manually delete related data since we removed cascade
         log.debug("Deleting keywords, match results and campaigns for CV ID: {}", cvId);
         
-        cvKeywordRepository.deleteByCvId(cvId);
-        matchResultRepository.deleteByCvId(cvId);
-        
-        // Find and delete campaigns (cascading to email logs)
+        // 1. Delete Campaigns (which should cascade to EmailLogs)
         List<EmailCampaign> campaigns = emailCampaignRepository.findAllByCvId(cvId);
         if (!campaigns.isEmpty()) {
             log.debug("Deleting {} campaigns associated with CV", campaigns.size());
             emailCampaignRepository.deleteAll(campaigns);
-            emailCampaignRepository.flush(); // Ensure deletion happens before CV delete
+            emailCampaignRepository.flush(); // Ensure email_log rows are gone
         }
 
+        // 2. Delete Match Results (now safe because EmailLogs referencing them are gone)
+        matchResultRepository.deleteByCvId(cvId);
+        matchResultRepository.flush();
+
+        // 3. Delete Keywords
+        cvKeywordRepository.deleteByCvId(cvId);
+        
         cvRepository.delete(cv);
         log.info("CV ID: {} successfully deleted from database", cvId);
     }

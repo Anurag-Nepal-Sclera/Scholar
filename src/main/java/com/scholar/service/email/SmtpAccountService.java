@@ -90,6 +90,17 @@ public class SmtpAccountService {
     }
 
     /**
+     * Retrieves active SMTP account for a tenant safely (Optional).
+     * 
+     * @param tenantId the tenant identifier
+     * @return optional containing active SMTP account or empty
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<SmtpAccount> findActiveSmtpAccount(UUID tenantId) {
+        return smtpAccountRepository.findActiveByTenantId(tenantId);
+    }
+
+    /**
      * Retrieves active SMTP account for a tenant.
      * 
      * @param tenantId the tenant identifier
