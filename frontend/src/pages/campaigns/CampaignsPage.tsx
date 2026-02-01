@@ -13,6 +13,7 @@ import {
   sendIndividualEmail,
 } from '@/store/slices/campaignSlice';
 import { fetchCVs } from '@/store/slices/cvSlice';
+import { fetchSmtpAccount } from '@/store/slices/smtpSlice';
 import { openModal, closeModal } from '@/store/slices/uiSlice';
 import {
   Card,
@@ -74,6 +75,7 @@ export const CampaignsPage: React.FC = () => {
     if (currentTenant) {
       if (activeTab === 'campaigns') {
         dispatch(fetchCampaigns({}));
+        dispatch(fetchSmtpAccount());
       } else {
         dispatch(fetchTenantLogs({}));
       }

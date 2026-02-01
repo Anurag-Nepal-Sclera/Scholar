@@ -3,6 +3,7 @@ package com.scholar.service.email;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import com.scholar.domain.entity.*;
 import com.scholar.domain.repository.*;
+import com.scholar.dto.response.EmailLogResponse;
 import com.scholar.service.cv.OpenRouterService;
 import com.scholar.service.storage.FileStorageService;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.mail.internet.MimeMessage;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -42,6 +44,7 @@ public class EmailCampaignService {
     private final SmtpAccountService smtpAccountService;
     private final OpenRouterService openRouterService;
     private final FileStorageService fileStorageService;
+    private final EmailOptionRepository emailOptionRepository;
     private final EmailCampaignService self;
 
     public EmailCampaignService(EmailCampaignRepository campaignRepository,
@@ -53,6 +56,7 @@ public class EmailCampaignService {
                                SmtpAccountService smtpAccountService,
                                OpenRouterService openRouterService,
                                FileStorageService fileStorageService,
+                               EmailOptionRepository emailOptionRepository,
                                @Lazy EmailCampaignService self) {
         this.campaignRepository = campaignRepository;
         this.emailLogRepository = emailLogRepository;
@@ -63,6 +67,7 @@ public class EmailCampaignService {
         this.smtpAccountService = smtpAccountService;
         this.openRouterService = openRouterService;
         this.fileStorageService = fileStorageService;
+        this.emailOptionRepository = emailOptionRepository;
         this.self = self;
     }
 
@@ -220,8 +225,18 @@ public class EmailCampaignService {
                 .filter(match -> !blacklistRepository.isBlacklisted(match.getProfessor().getEmail(), campaign.getTenant().getId()))
                 .collect(Collectors.toList());
 
-            List<UUID> emailLogIds = self.initializeEmailLogs(campaignId, validMatches);
-            processBatchedEmails(campaignId, emailLogIds, cvFile, fileName);
+            List<UUID> newEmailLogIds = self.initializeEmailLogs(campaignId, validMatches);
+            
+            // CRITICAL: We need to process ALL pending logs for this campaign, 
+            // not just the ones created in this call, because auto-campaigns 
+            // initialize logs before execution.
+            List<EmailLog> allPendingLogs = emailLogRepository.findByCampaignIdAndStatus(campaignId, EmailLog.EmailStatus.PENDING);
+            List<UUID> emailLogIdsToProcess = allPendingLogs.stream().map(EmailLog::getId).collect(Collectors.toList());
+            
+            log.info("Campaign {} execution starting for {} valid recipients ({} already pending)", 
+                campaignId, validMatches.size(), emailLogIdsToProcess.size());
+            
+            processBatchedEmails(campaignId, emailLogIdsToProcess, cvFile, fileName);
 
             self.updateCampaignStatus(campaignId, EmailCampaign.CampaignStatus.COMPLETED, null, LocalDateTime.now());
         } catch (Exception e) {
@@ -249,14 +264,20 @@ public class EmailCampaignService {
                 }
 
                 EmailLog logEntry = emailLogRepository.findById(emailLogId).orElseThrow();
-                List<CvKeyword> studentKeywords = cvKeywordRepository.findByCvId(campaign.getCv().getId());
-                String keywordsStr = studentKeywords.stream().map(CvKeyword::getKeyword).collect(Collectors.joining(", "));
                 
-                String aiBody = openRouterService.generateOutreachEmail(keywordsStr, 
-                    logEntry.getProfessor().getFirstName() + " " + logEntry.getProfessor().getLastName(),
-                    logEntry.getProfessor().getUniversity().getName(), logEntry.getMatchResult().getMatchedKeywords());
+                String bodyToSend = logEntry.getBody();
 
-                boolean success = self.sendAndUpdateLog(emailLogId, aiBody, attachment, fileName, mailSender, smtpAccount);
+                // Only generate AI body if it's missing or placeholder
+                if (bodyToSend == null || bodyToSend.trim().isEmpty() || bodyToSend.equals("AI_GENERATED")) {
+                    List<CvKeyword> studentKeywords = cvKeywordRepository.findByCvId(campaign.getCv().getId());
+                    String keywordsStr = studentKeywords.stream().map(CvKeyword::getKeyword).collect(Collectors.joining(", "));
+                    
+                    bodyToSend = openRouterService.generateOutreachEmail(keywordsStr, 
+                        logEntry.getProfessor().getFirstName() + " " + logEntry.getProfessor().getLastName(),
+                        logEntry.getProfessor().getUniversity().getName(), logEntry.getMatchResult().getMatchedKeywords());
+                }
+
+                boolean success = self.sendAndUpdateLog(emailLogId, bodyToSend, attachment, fileName, mailSender, smtpAccount);
                 if (success) sent++; else failed++;
             } catch (Exception e) { failed++; }
 
@@ -396,6 +417,21 @@ public class EmailCampaignService {
     public Page<EmailCampaign> getAllCampaigns(UUID tid, Pageable p) { return campaignRepository.findAllByTenantId(tid, p); }
 
     @Transactional(readOnly = true)
+    public EmailLogResponse getEmailLogResponse(UUID logId) {
+        return toLogResponse(getEmailLog(logId));
+    }
+
+    @Transactional
+    public EmailLogResponse updateEmailLogBodyResponse(UUID logId, String body, UUID tenantId) {
+        return toLogResponse(updateEmailLogBody(logId, body, tenantId));
+    }
+
+    @Transactional
+    public EmailLogResponse regenerateEmailLogResponse(UUID logId, UUID tenantId) {
+        return toLogResponse(regenerateEmailLog(logId, tenantId));
+    }
+
+    @Transactional(readOnly = true)
     public EmailLog getEmailLog(UUID logId) {
         return emailLogRepository.findById(logId)
             .orElseThrow(() -> new IllegalArgumentException("Email log not found: " + logId));
@@ -467,6 +503,56 @@ public class EmailCampaignService {
         // Update campaign counters
         campaign.setSentCount(campaign.getSentCount() + 1);
         campaignRepository.save(campaign);
+    }
+
+    @Transactional
+    public void selectEmailOption(UUID logId, UUID optionId, UUID tenantId) {
+        EmailLog emailLog = getEmailLog(logId);
+        if (!emailLog.getTenant().getId().equals(tenantId)) {
+            throw new IllegalArgumentException("Access denied to email log");
+        }
+
+        EmailOption selectedOption = emailOptionRepository.findById(optionId)
+            .orElseThrow(() -> new EntityNotFoundException("Email option not found: " + optionId));
+
+        if (!selectedOption.getEmailLog().getId().equals(logId)) {
+            throw new IllegalArgumentException("Option does not belong to the specified email log");
+        }
+
+        // Reset all options and select the new one
+        for (EmailOption option : emailLog.getOptions()) {
+            option.setIsSelected(option.getId().equals(optionId));
+        }
+
+        emailLog.setBody(selectedOption.getBody());
+        emailLogRepository.save(emailLog);
+        log.info("Selected email option {} for log {}", optionId, logId);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<EmailLogResponse> getCampaignLogsResponse(UUID id, Pageable p) {
+        return emailLogRepository.findByCampaignId(id, p).map(this::toLogResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<EmailLogResponse> getAllTenantLogsResponse(UUID tenantId, Pageable p) {
+        return emailLogRepository.findByTenantId(tenantId, p).map(this::toLogResponse);
+    }
+
+    private EmailLogResponse toLogResponse(EmailLog logEntry) {
+        return EmailLogResponse.builder()
+            .id(logEntry.getId())
+            .recipientEmail(logEntry.getRecipientEmail())
+            .subject(logEntry.getSubject())
+            .body(logEntry.getBody())
+            .status(logEntry.getStatus().name())
+            .errorMessage(logEntry.getErrorMessage())
+            .retryCount(logEntry.getRetryCount())
+            .sentAt(logEntry.getSentAt())
+            .createdAt(logEntry.getCreatedAt())
+            .professorId(logEntry.getProfessor().getId())
+            .professorName(logEntry.getProfessor().getFirstName() + " " + logEntry.getProfessor().getLastName())
+            .build();
     }
 
     @Transactional(readOnly = true)

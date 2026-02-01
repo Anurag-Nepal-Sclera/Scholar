@@ -159,8 +159,7 @@ public class EmailCampaignController {
     ) {
         try {
             securityUtils.validateTenantOwnership(tenantId);
-            Page<EmailLog> logs = campaignService.getAllTenantLogs(tenantId, pageable);
-            Page<EmailLogResponse> response = logs.map(this::toLogResponse);
+            Page<EmailLogResponse> response = campaignService.getAllTenantLogsResponse(tenantId, pageable);
             return ResponseEntity.ok(ApiResponse.success(response));
         } catch (Exception e) {
             log.error("Failed to get all logs", e);
@@ -199,8 +198,7 @@ public class EmailCampaignController {
     ) {
         try {
             securityUtils.validateTenantOwnership(tenantId);
-            Page<EmailLog> logs = campaignService.getCampaignLogs(campaignId, pageable);
-            Page<EmailLogResponse> response = logs.map(this::toLogResponse);
+            Page<EmailLogResponse> response = campaignService.getCampaignLogsResponse(campaignId, pageable);
             return ResponseEntity.ok(ApiResponse.success(response));
         } catch (Exception e) {
             log.error("Failed to get campaign logs", e);
@@ -241,22 +239,6 @@ public class EmailCampaignController {
             .startedAt(campaign.getStartedAt())
             .completedAt(campaign.getCompletedAt())
             .createdAt(campaign.getCreatedAt())
-            .build();
-    }
-
-    private EmailLogResponse toLogResponse(EmailLog log) {
-        return EmailLogResponse.builder()
-            .id(log.getId())
-            .recipientEmail(log.getRecipientEmail())
-            .subject(log.getSubject())
-            .body(log.getBody()) // Added body
-            .status(log.getStatus().name())
-            .errorMessage(log.getErrorMessage())
-            .retryCount(log.getRetryCount())
-            .sentAt(log.getSentAt())
-            .createdAt(log.getCreatedAt())
-            .professorId(log.getProfessor().getId())
-            .professorName(log.getProfessor().getFirstName() + " " + log.getProfessor().getLastName()) // Added professor name
             .build();
     }
 }

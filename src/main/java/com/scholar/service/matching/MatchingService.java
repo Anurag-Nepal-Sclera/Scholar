@@ -2,8 +2,10 @@ package com.scholar.service.matching;
 
 import com.scholar.domain.entity.*;
 import com.scholar.domain.repository.*;
-import lombok.extern.slf4j.Slf4j;
+import com.scholar.dto.response.EmailOptionResponse;
+import com.scholar.dto.response.MatchResultResponse;
 import com.scholar.service.email.EmailCampaignService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -30,6 +32,7 @@ public class MatchingService {
     private final CvKeywordRepository cvKeywordRepository;
     private final ProfessorRepository professorRepository;
     private final MatchResultRepository matchResultRepository;
+    private final EmailLogRepository emailLogRepository;
     private final EmailCampaignService emailCampaignService;
     private final MatchingService self;
 
@@ -37,12 +40,14 @@ public class MatchingService {
                            CvKeywordRepository cvKeywordRepository,
                            ProfessorRepository professorRepository,
                            MatchResultRepository matchResultRepository,
+                           EmailLogRepository emailLogRepository,
                            EmailCampaignService emailCampaignService,
                            @Lazy MatchingService self) {
         this.cvRepository = cvRepository;
         this.cvKeywordRepository = cvKeywordRepository;
         this.professorRepository = professorRepository;
         this.matchResultRepository = matchResultRepository;
+        this.emailLogRepository = emailLogRepository;
         this.emailCampaignService = emailCampaignService;
         this.self = self;
     }
@@ -199,22 +204,67 @@ public class MatchingService {
      * @param pageable pagination parameters
      * @return page of match results ordered by score descending
      */
+    /**
+     * Retrieves match results for a CV as DTOs.
+     *
+     * @param cvId the CV identifier
+     * @param tenantId the tenant identifier
+     * @param pageable pagination parameters
+     * @return page of match results response
+     */
     @Transactional(readOnly = true)
-    public Page<MatchResult> getMatchResults(UUID cvId, UUID tenantId, Pageable pageable) {
-        return matchResultRepository.findByCvIdAndTenantIdOrderByScoreDesc(cvId, tenantId, pageable);
+    public Page<MatchResultResponse> getMatchResultsResponse(UUID cvId, UUID tenantId, Pageable pageable) {
+        return matchResultRepository.findByCvIdAndTenantIdOrderByScoreDesc(cvId, tenantId, pageable)
+                .map(this::toMatchResultResponse);
     }
 
     /**
-     * Retrieves match results above a minimum score threshold.
+     * Retrieves match results above a minimum score threshold as DTOs.
      *
      * @param cvId the CV identifier
      * @param tenantId the tenant identifier
      * @param minScore minimum match score
-     * @return list of match results
+     * @return list of match results response
      */
     @Transactional(readOnly = true)
-    public List<MatchResult> getMatchResultsAboveThreshold(UUID cvId, UUID tenantId, BigDecimal minScore) {
-        return matchResultRepository.findByCvIdAndTenantIdAndMinScore(cvId, tenantId, minScore);
+    public List<MatchResultResponse> getMatchResultsAboveThresholdResponse(UUID cvId, UUID tenantId, BigDecimal minScore) {
+        return matchResultRepository.findByCvIdAndTenantIdAndMinScore(cvId, tenantId, minScore).stream()
+                .map(this::toMatchResultResponse)
+                .collect(Collectors.toList());
+    }
+
+    private MatchResultResponse toMatchResultResponse(MatchResult match) {
+        List<EmailOptionResponse> options = null;
+        EmailLog emailLog = emailLogRepository.findLatestByMatchResultId(match.getId()).orElse(null);
+
+        if (emailLog != null && emailLog.getOptions() != null) {
+            options = emailLog.getOptions().stream()
+                    .map(o -> EmailOptionResponse.builder()
+                            .id(o.getId())
+                            .body(o.getBody())
+                            .isSelected(o.getIsSelected())
+                            .build())
+                    .collect(Collectors.toList());
+        }
+
+        return MatchResultResponse.builder()
+                .id(match.getId())
+                .professor(MatchResultResponse.ProfessorSummary.builder()
+                        .id(match.getProfessor().getId())
+                        .firstName(match.getProfessor().getFirstName())
+                        .lastName(match.getProfessor().getLastName())
+                        .email(match.getProfessor().getEmail())
+                        .department(match.getProfessor().getDepartment())
+                        .universityName(match.getProfessor().getUniversity().getName())
+                        .universityCountry(match.getProfessor().getUniversity().getCountry())
+                        .build())
+                .matchScore(match.getMatchScore())
+                .matchedKeywords(match.getMatchedKeywords())
+                .totalCvKeywords(match.getTotalCvKeywords())
+                .totalProfessorKeywords(match.getTotalProfessorKeywords())
+                .totalMatchedKeywords(match.getTotalMatchedKeywords())
+                .emailOptions(options)
+                .build();
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.scholar.controller;
 
 import com.scholar.config.security.SecurityUtils;
+import com.scholar.domain.entity.EmailLog;
 import com.scholar.domain.entity.MatchResult;
 import com.scholar.dto.response.ApiResponse;
 import com.scholar.dto.response.MatchResultResponse;
@@ -30,7 +31,6 @@ import java.util.stream.Collectors;
 @Slf4j
 @Tag(name = "Match Results", description = "APIs for retrieving CV-Professor matches")
 public class MatchController {
-
     private final MatchingService matchingService;
     private final SecurityUtils securityUtils;
 
@@ -43,9 +43,7 @@ public class MatchController {
     ) {
         try {
             securityUtils.validateTenantOwnership(tenantId);
-            Page<MatchResult> matches = matchingService.getMatchResults(cvId, tenantId, pageable);
-            Page<MatchResultResponse> response = matches.map(this::toResponse);
-
+            Page<MatchResultResponse> response = matchingService.getMatchResultsResponse(cvId, tenantId, pageable);
             return ResponseEntity.ok(ApiResponse.success(response));
         } catch (Exception e) {
             log.error("Failed to get matches", e);
@@ -63,11 +61,7 @@ public class MatchController {
     ) {
         try {
             securityUtils.validateTenantOwnership(tenantId);
-            List<MatchResult> matches = matchingService.getMatchResultsAboveThreshold(cvId, tenantId, minScore);
-            List<MatchResultResponse> response = matches.stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
-
+            List<MatchResultResponse> response = matchingService.getMatchResultsAboveThresholdResponse(cvId, tenantId, minScore);
             return ResponseEntity.ok(ApiResponse.success(response));
         } catch (Exception e) {
             log.error("Failed to get matches", e);
@@ -91,37 +85,5 @@ public class MatchController {
             return ResponseEntity.badRequest()
                 .body(ApiResponse.error("Failed to recompute matches: " + e.getMessage()));
         }
-    }
-
-    private MatchResultResponse toResponse(MatchResult match) {
-        List<EmailOptionResponse> options = null;
-        if (match.getEmailLog() != null && match.getEmailLog().getOptions() != null) {
-            options = match.getEmailLog().getOptions().stream()
-                .map(o -> EmailOptionResponse.builder()
-                    .id(o.getId())
-                    .body(o.getBody())
-                    .isSelected(o.getIsSelected())
-                    .build())
-                .collect(Collectors.toList());
-        }
-
-        return MatchResultResponse.builder()
-            .id(match.getId())
-            .professor(MatchResultResponse.ProfessorSummary.builder()
-                .id(match.getProfessor().getId())
-                .firstName(match.getProfessor().getFirstName())
-                .lastName(match.getProfessor().getLastName())
-                .email(match.getProfessor().getEmail())
-                .department(match.getProfessor().getDepartment())
-                .universityName(match.getProfessor().getUniversity().getName())
-                .universityCountry(match.getProfessor().getUniversity().getCountry())
-                .build())
-            .matchScore(match.getMatchScore())
-            .matchedKeywords(match.getMatchedKeywords())
-            .totalCvKeywords(match.getTotalCvKeywords())
-            .totalProfessorKeywords(match.getTotalProfessorKeywords())
-            .totalMatchedKeywords(match.getTotalMatchedKeywords())
-            .emailOptions(options)
-            .build();
     }
 }

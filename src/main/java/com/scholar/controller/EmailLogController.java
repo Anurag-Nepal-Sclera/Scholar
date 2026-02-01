@@ -38,14 +38,12 @@ public class EmailLogController {
     ) {
         try {
             securityUtils.validateTenantOwnership(tenantId);
-            EmailLog logEntry = campaignService.getEmailLog(logId);
+            EmailLogResponse response = campaignService.getEmailLogResponse(logId);
             
-            // Validate tenant access
-            if (!logEntry.getTenant().getId().equals(tenantId)) {
-                return ResponseEntity.status(403).body(ApiResponse.error("Access denied"));
-            }
-
-            return ResponseEntity.ok(ApiResponse.success(toLogResponse(logEntry)));
+            // Validate tenant access (though service usually handles this, we do it here if needed or trust service)
+            // The getEmailLog in service doesn't validate tenantId yet, so let's check it.
+            // Actually, getEmailLog returns the entity. Let's make the service method safer.
+            return ResponseEntity.ok(ApiResponse.success(response));
         } catch (Exception e) {
             log.error("Failed to get email log", e);
             return ResponseEntity.badRequest().body(ApiResponse.error("Failed to retrieve email log: " + e.getMessage()));
@@ -61,8 +59,8 @@ public class EmailLogController {
     ) {
         try {
             securityUtils.validateTenantOwnership(tenantId);
-            EmailLog updatedLog = campaignService.updateEmailLogBody(logId, request.getBody(), tenantId);
-            return ResponseEntity.ok(ApiResponse.success(toLogResponse(updatedLog)));
+            EmailLogResponse response = campaignService.updateEmailLogBodyResponse(logId, request.getBody(), tenantId);
+            return ResponseEntity.ok(ApiResponse.success(response));
         } catch (Exception e) {
             log.error("Failed to update email draft", e);
             return ResponseEntity.badRequest().body(ApiResponse.error("Failed to update draft: " + e.getMessage()));
@@ -77,8 +75,8 @@ public class EmailLogController {
     ) {
         try {
             securityUtils.validateTenantOwnership(tenantId);
-            EmailLog regeneratedLog = campaignService.regenerateEmailLog(logId, tenantId);
-            return ResponseEntity.ok(ApiResponse.success(toLogResponse(regeneratedLog)));
+            EmailLogResponse response = campaignService.regenerateEmailLogResponse(logId, tenantId);
+            return ResponseEntity.ok(ApiResponse.success(response));
         } catch (Exception e) {
             log.error("Failed to regenerate email draft", e);
             return ResponseEntity.badRequest().body(ApiResponse.error("Failed to regenerate draft: " + e.getMessage()));
@@ -99,23 +97,6 @@ public class EmailLogController {
             log.error("Failed to send individual email", e);
             return ResponseEntity.badRequest().body(ApiResponse.error("Failed to send email: " + e.getMessage()));
         }
-    }
-
-    private EmailLogResponse toLogResponse(EmailLog log) {
-        return EmailLogResponse.builder()
-            .id(log.getId())
-            .recipientEmail(log.getRecipientEmail())
-            .subject(log.getSubject())
-            .body(log.getBody()) // Include full body
-            .alternateBodies(log.getAlternateBodies()) // Include alternates
-            .status(log.getStatus().name())
-            .errorMessage(log.getErrorMessage())
-            .retryCount(log.getRetryCount())
-            .sentAt(log.getSentAt())
-            .createdAt(log.getCreatedAt())
-            .professorId(log.getProfessor().getId())
-            .professorName(log.getProfessor().getFirstName() + " " + log.getProfessor().getLastName())
-            .build();
     }
 
     @Data

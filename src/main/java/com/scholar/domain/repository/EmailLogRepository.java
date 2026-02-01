@@ -43,5 +43,12 @@ public interface EmailLogRepository extends JpaRepository<EmailLog, UUID> {
     @Query("SELECT e FROM EmailLog e JOIN FETCH e.professor p WHERE e.tenant.id = :tenantId ORDER BY e.sentAt DESC NULLS LAST, e.createdAt DESC")
     Page<EmailLog> findByTenantId(@Param("tenantId") UUID tenantId, Pageable pageable);
 
+    @Query("SELECT e FROM EmailLog e LEFT JOIN FETCH e.options WHERE e.matchResult.id = :matchResultId ORDER BY e.createdAt DESC")
+    List<EmailLog> findByMatchResultIdWithHolders(@Param("matchResultId") UUID matchResultId);
+
+    default java.util.Optional<EmailLog> findLatestByMatchResultId(UUID matchResultId) {
+        return findByMatchResultIdWithHolders(matchResultId).stream().findFirst();
+    }
+
     boolean existsByEmailCampaignIdAndProfessorId(UUID emailCampaignId, UUID professorId);
 }
