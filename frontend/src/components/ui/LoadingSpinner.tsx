@@ -15,9 +15,9 @@ export const LoadingSpinner = ({
     subMessage = "This may take 20-30 seconds..."
 }: LoadingSpinnerProps) => {
     const sizeClasses = {
-        sm: { container: "w-20 h-20", icon: "w-6 h-6", ring: 80 },
-        md: { container: "w-28 h-28", icon: "w-8 h-8", ring: 112 },
-        lg: { container: "w-36 h-36", icon: "w-12 h-12", ring: 144 },
+        sm: { container: "w-20 h-20", icon: "w-8 h-8", ring: 80 },
+        md: { container: "w-28 h-28", icon: "w-10 h-10", ring: 112 },
+        lg: { container: "w-36 h-36", icon: "w-22 h-22", ring: 144 },
     };
 
     const config = sizeClasses[size];
