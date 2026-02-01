@@ -5,6 +5,8 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -78,6 +80,10 @@ public class EmailLog {
 
     @Column(name = "sent_at")
     private LocalDateTime sentAt;
+
+    @OneToMany(mappedBy = "emailLog", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private Set<EmailOption> options = new HashSet<>();
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)

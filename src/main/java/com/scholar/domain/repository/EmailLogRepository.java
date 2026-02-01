@@ -28,6 +28,11 @@ public interface EmailLogRepository extends JpaRepository<EmailLog, UUID> {
     List<EmailLog> findByCampaignIdAndStatus(@Param("campaignId") UUID campaignId, 
                                              @Param("status") EmailLog.EmailStatus status);
     
+    @Query("SELECT e FROM EmailLog e " +
+           "JOIN FETCH e.professor p " +
+           "WHERE e.emailCampaign.id = :campaignId")
+    List<EmailLog> findByEmailCampaignId(@Param("campaignId") UUID campaignId);
+
     @Query("SELECT COUNT(e) FROM EmailLog e WHERE e.emailCampaign.id = :campaignId AND e.status = :status")
     long countByCampaignIdAndStatus(@Param("campaignId") UUID campaignId, 
                                     @Param("status") EmailLog.EmailStatus status);

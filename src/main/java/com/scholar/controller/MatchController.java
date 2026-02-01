@@ -4,6 +4,7 @@ import com.scholar.config.security.SecurityUtils;
 import com.scholar.domain.entity.MatchResult;
 import com.scholar.dto.response.ApiResponse;
 import com.scholar.dto.response.MatchResultResponse;
+import com.scholar.dto.response.EmailOptionResponse;
 import com.scholar.service.matching.MatchingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -93,6 +94,17 @@ public class MatchController {
     }
 
     private MatchResultResponse toResponse(MatchResult match) {
+        List<EmailOptionResponse> options = null;
+        if (match.getEmailLog() != null && match.getEmailLog().getOptions() != null) {
+            options = match.getEmailLog().getOptions().stream()
+                .map(o -> EmailOptionResponse.builder()
+                    .id(o.getId())
+                    .body(o.getBody())
+                    .isSelected(o.getIsSelected())
+                    .build())
+                .collect(Collectors.toList());
+        }
+
         return MatchResultResponse.builder()
             .id(match.getId())
             .professor(MatchResultResponse.ProfessorSummary.builder()
@@ -109,6 +121,7 @@ public class MatchController {
             .totalCvKeywords(match.getTotalCvKeywords())
             .totalProfessorKeywords(match.getTotalProfessorKeywords())
             .totalMatchedKeywords(match.getTotalMatchedKeywords())
+            .emailOptions(options)
             .build();
     }
 }

@@ -2,7 +2,6 @@ package com.scholar.service.matching;
 
 import com.scholar.domain.entity.*;
 import com.scholar.domain.repository.*;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import com.scholar.service.email.EmailCampaignService;
 import org.springframework.context.annotation.Lazy;
@@ -30,7 +29,6 @@ public class MatchingService {
     private final CVRepository cvRepository;
     private final CvKeywordRepository cvKeywordRepository;
     private final ProfessorRepository professorRepository;
-    private final ProfessorKeywordRepository professorKeywordRepository;
     private final MatchResultRepository matchResultRepository;
     private final EmailCampaignService emailCampaignService;
     private final MatchingService self;
@@ -38,14 +36,12 @@ public class MatchingService {
     public MatchingService(CVRepository cvRepository,
                            CvKeywordRepository cvKeywordRepository,
                            ProfessorRepository professorRepository,
-                           ProfessorKeywordRepository professorKeywordRepository,
                            MatchResultRepository matchResultRepository,
                            EmailCampaignService emailCampaignService,
                            @Lazy MatchingService self) {
         this.cvRepository = cvRepository;
         this.cvKeywordRepository = cvKeywordRepository;
         this.professorRepository = professorRepository;
-        this.professorKeywordRepository = professorKeywordRepository;
         this.matchResultRepository = matchResultRepository;
         this.emailCampaignService = emailCampaignService;
         this.self = self;
@@ -53,7 +49,7 @@ public class MatchingService {
 
     /**
      * Computes matches for a CV against all active professors.
-     * 
+     *
      * @param cvId the CV identifier
      * @param tenantId the tenant identifier
      */
@@ -63,10 +59,10 @@ public class MatchingService {
         log.info("Starting match computation for CV ID: {} in Tenant ID: {}", cvId, tenantId);
         try {
             CV cv = cvRepository.findByIdAndTenantId(cvId, tenantId)
-                .orElseThrow(() -> {
-                    log.error("CV not found or access denied: {} for tenant: {}", cvId, tenantId);
-                    return new IllegalArgumentException("CV not found: " + cvId);
-                });
+                    .orElseThrow(() -> {
+                        log.error("CV not found or access denied: {} for tenant: {}", cvId, tenantId);
+                        return new IllegalArgumentException("CV not found: " + cvId);
+                    });
 
             if (cv.getParsingStatus() != CV.ParsingStatus.COMPLETED) {
                 log.warn("Computation skipped: CV {} status is {}, expected COMPLETED", cvId, cv.getParsingStatus());
@@ -83,24 +79,24 @@ public class MatchingService {
 
             log.debug("Preparing keyword map for {} CV keywords", cvKeywords.size());
             Map<String, BigDecimal> cvKeywordMap = cvKeywords.stream()
-                .collect(Collectors.toMap(
-                    CvKeyword::getNormalizedKeyword,
-                    CvKeyword::getWeight,
-                    (w1, w2) -> w1.max(w2)
-                ));
+                    .collect(Collectors.toMap(
+                            CvKeyword::getNormalizedKeyword,
+                            CvKeyword::getWeight,
+                            (w1, w2) -> w1.max(w2)
+                    ));
 
             // Get all active professors
             log.debug("Fetching active professors for matching...");
             List<Professor> professors = professorRepository.findAll().stream()
-                .filter(p -> p.getStatus() == Professor.ProfessorStatus.ACTIVE)
-                .collect(Collectors.toList());
+                    .filter(p -> p.getStatus() == Professor.ProfessorStatus.ACTIVE)
+                    .collect(Collectors.toList());
 
             log.info("Computing matches for CV {} against {} active professors", cvId, professors.size());
 
             // Get existing match results to perform upsert
             log.debug("Fetching existing match results for CV ID: {} to avoid duplicates", cvId);
             Map<UUID, MatchResult> existingMatchMap = matchResultRepository.findByCvId(cvId).stream()
-                .collect(Collectors.toMap(m -> m.getProfessor().getId(), m -> m));
+                    .collect(Collectors.toMap(m -> m.getProfessor().getId(), m -> m));
 
             List<MatchResult> matchResultsToSave = new ArrayList<>();
 
@@ -136,79 +132,68 @@ public class MatchingService {
      * Performs an update if existingMatch is provided, otherwise creates a new one.
      */
     private MatchResult computeSingleMatch(CV cv, Professor professor, Map<String, BigDecimal> cvKeywordMap, MatchResult existingMatch) {
-        List<ProfessorKeyword> professorKeywords = professorKeywordRepository.findByProfessorId(professor.getId());
-        
-        if (professorKeywords.isEmpty()) {
+        String researchArea = professor.getResearchArea() != null ? professor.getResearchArea().toLowerCase() : "";
+        String department = professor.getDepartment() != null ? professor.getDepartment().toLowerCase() : "";
+        String combinedText = researchArea + " " + department;
+
+        if (combinedText.isBlank()) {
             return null;
         }
 
-        Map<String, BigDecimal> professorKeywordMap = professorKeywords.stream()
-            .collect(Collectors.toMap(
-                ProfessorKeyword::getNormalizedKeyword,
-                ProfessorKeyword::getWeight,
-                (w1, w2) -> w1.max(w2)
-            ));
+        Set<String> matchedKeywords = new HashSet<>();
+        BigDecimal totalScore = BigDecimal.ZERO;
+        BigDecimal maxPossibleScore = BigDecimal.ZERO;
 
-        // Find intersecting keywords
-        Set<String> matchedKeywords = new HashSet<>(cvKeywordMap.keySet());
-        matchedKeywords.retainAll(professorKeywordMap.keySet());
+        // Count "professor keywords" by splitting research area (approximate for stats)
+        String[] profKeywords = researchArea.split("[,;\\s]+");
+        int profKeywordCount = (int) Arrays.stream(profKeywords).filter(s -> !s.isBlank()).distinct().count();
+
+        for (Map.Entry<String, BigDecimal> entry : cvKeywordMap.entrySet()) {
+            String keyword = entry.getKey();
+            BigDecimal weight = entry.getValue();
+            maxPossibleScore = maxPossibleScore.add(weight);
+
+            if (combinedText.contains(keyword)) {
+                matchedKeywords.add(keyword);
+                totalScore = totalScore.add(weight);
+            }
+        }
 
         if (matchedKeywords.isEmpty()) {
             return null;
         }
 
-        // Compute weighted score
-        BigDecimal totalScore = BigDecimal.ZERO;
-        BigDecimal maxPossibleScore = BigDecimal.ZERO;
-
-        for (String keyword : matchedKeywords) {
-            BigDecimal cvWeight = cvKeywordMap.get(keyword);
-            BigDecimal profWeight = professorKeywordMap.get(keyword);
-            
-            // Score = CV_weight * Professor_weight
-            BigDecimal keywordScore = cvWeight.multiply(profWeight);
-            totalScore = totalScore.add(keywordScore);
-        }
-
-        // Calculate max possible score (all keywords matched with max weights)
-        for (BigDecimal weight : cvKeywordMap.values()) {
-            maxPossibleScore = maxPossibleScore.add(weight);
-        }
-
         // Normalize score to [0, 1]
         BigDecimal matchScore = maxPossibleScore.compareTo(BigDecimal.ZERO) > 0
-            ? totalScore.divide(maxPossibleScore, 6, RoundingMode.HALF_UP)
-            : BigDecimal.ZERO;
+                ? totalScore.divide(maxPossibleScore, 6, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
 
-        // Build matched keywords string (comma-separated)
         String matchedKeywordsStr = String.join(", ", matchedKeywords);
 
         if (existingMatch != null) {
-            // Update existing record
             existingMatch.setMatchScore(matchScore);
             existingMatch.setMatchedKeywords(matchedKeywordsStr);
             existingMatch.setTotalCvKeywords(cvKeywordMap.size());
-            existingMatch.setTotalProfessorKeywords(professorKeywordMap.size());
+            existingMatch.setTotalProfessorKeywords(profKeywordCount);
             existingMatch.setTotalMatchedKeywords(matchedKeywords.size());
             return existingMatch;
         } else {
-            // Create new record
             return MatchResult.builder()
-                .tenant(cv.getTenant())
-                .cv(cv)
-                .professor(professor)
-                .matchScore(matchScore)
-                .matchedKeywords(matchedKeywordsStr)
-                .totalCvKeywords(cvKeywordMap.size())
-                .totalProfessorKeywords(professorKeywordMap.size())
-                .totalMatchedKeywords(matchedKeywords.size())
-                .build();
+                    .tenant(cv.getTenant())
+                    .cv(cv)
+                    .professor(professor)
+                    .matchScore(matchScore)
+                    .matchedKeywords(matchedKeywordsStr)
+                    .totalCvKeywords(cvKeywordMap.size())
+                    .totalProfessorKeywords(profKeywordCount)
+                    .totalMatchedKeywords(matchedKeywords.size())
+                    .build();
         }
     }
 
     /**
      * Retrieves match results for a CV.
-     * 
+     *
      * @param cvId the CV identifier
      * @param tenantId the tenant identifier
      * @param pageable pagination parameters
@@ -221,7 +206,7 @@ public class MatchingService {
 
     /**
      * Retrieves match results above a minimum score threshold.
-     * 
+     *
      * @param cvId the CV identifier
      * @param tenantId the tenant identifier
      * @param minScore minimum match score
@@ -234,7 +219,7 @@ public class MatchingService {
 
     /**
      * Recomputes all matches for a CV (clears existing matches first).
-     * 
+     *
      * @param cvId the CV identifier
      * @param tenantId the tenant identifier
      */
@@ -242,7 +227,7 @@ public class MatchingService {
     public void recomputeMatches(UUID cvId, UUID tenantId) {
         log.info("Recomputing matches for CV: {}", cvId);
         matchResultRepository.deleteByCvId(cvId);
-        
+
         // Trigger async computation after transaction commit to avoid race condition
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {

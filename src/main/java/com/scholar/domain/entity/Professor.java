@@ -73,10 +73,6 @@ public class Professor {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
-    @OneToMany(mappedBy = "professor", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
-    @Builder.Default
-    private Set<ProfessorKeyword> keywords = new HashSet<>();
-
     @OneToMany(mappedBy = "professor", fetch = FetchType.LAZY)
     @Builder.Default
     private Set<MatchResult> matchResults = new HashSet<>();
