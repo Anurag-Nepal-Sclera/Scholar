@@ -234,18 +234,46 @@ public class MatchingService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Retrieves match results above a minimum score threshold as a paginated response.
+     *
+     * @param cvId the CV identifier
+     * @param tenantId the tenant identifier
+     * @param minScore minimum match score
+     * @param pageable pagination parameters
+     * @return page of match results response
+     */
+    @Transactional(readOnly = true)
+    public Page<MatchResultResponse> getMatchResultsAboveThresholdResponse(UUID cvId, UUID tenantId, BigDecimal minScore, Pageable pageable) {
+        return matchResultRepository.findByCvIdAndTenantIdAndMinScorePaginated(cvId, tenantId, minScore, pageable)
+                .map(this::toMatchResultResponse);
+    }
+
     private MatchResultResponse toMatchResultResponse(MatchResult match) {
         List<EmailOptionResponse> options = null;
-        EmailLog emailLog = emailLogRepository.findLatestByMatchResultId(match.getId()).orElse(null);
+        UUID tenantId = match.getTenant().getId();
+        UUID matchResultId = match.getId();
+        UUID professorId = match.getProfessor().getId();
 
-        if (emailLog != null && emailLog.getOptions() != null) {
-            options = emailLog.getOptions().stream()
-                    .map(o -> EmailOptionResponse.builder()
-                            .id(o.getId())
-                            .body(o.getBody())
-                            .isSelected(o.getIsSelected())
-                            .build())
-                    .collect(Collectors.toList());
+        // Try getting latest by specific match result first (most accurate for current campaign flow)
+        EmailLog emailLog = emailLogRepository.findLatestByMatchResultId(matchResultId)
+                .orElseGet(() -> emailLogRepository.findLatestByTenantAndProfessorId(tenantId, professorId).orElse(null));
+
+        boolean isEmailed = false;
+        if (emailLog != null) {
+            isEmailed = emailLog.getStatus() == EmailLog.EmailStatus.SENT ||
+                        emailLog.getStatus() == EmailLog.EmailStatus.SENDING ||
+                        emailLog.getStatus() == EmailLog.EmailStatus.PENDING;
+
+            if (emailLog.getOptions() != null) {
+                options = emailLog.getOptions().stream()
+                        .map(o -> EmailOptionResponse.builder()
+                                .id(o.getId())
+                                .body(o.getBody())
+                                .isSelected(o.getIsSelected())
+                                .build())
+                        .collect(Collectors.toList());
+            }
         }
 
         return MatchResultResponse.builder()
@@ -264,6 +292,7 @@ public class MatchingService {
                 .totalCvKeywords(match.getTotalCvKeywords())
                 .totalProfessorKeywords(match.getTotalProfessorKeywords())
                 .totalMatchedKeywords(match.getTotalMatchedKeywords())
+                .isEmailed(isEmailed)
                 .emailOptions(options)
                 .build();
     }

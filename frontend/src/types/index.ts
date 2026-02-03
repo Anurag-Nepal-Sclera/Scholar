@@ -95,6 +95,12 @@ export interface ProfessorSummary {
   universityCountry: string;
 }
 
+export interface EmailOptionResponse {
+  id: string;
+  body: string;
+  isSelected: boolean;
+}
+
 export interface MatchResultResponse {
   id: string;
   professor: ProfessorSummary;
@@ -103,6 +109,8 @@ export interface MatchResultResponse {
   totalCvKeywords: number;
   totalProfessorKeywords: number;
   totalMatchedKeywords: number;
+  isEmailed?: boolean;
+  emailOptions?: EmailOptionResponse[];
 }
 
 // Email Campaigns

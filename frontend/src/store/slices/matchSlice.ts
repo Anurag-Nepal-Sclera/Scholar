@@ -23,7 +23,7 @@ const initialState: MatchState = {
   matches: [],
   pagination: {
     page: 0,
-    size: 20,
+    size: 10,
     totalElements: 0,
     totalPages: 0,
   },
@@ -52,7 +52,7 @@ export const fetchMatches = createAsyncThunk(
           params: {
             tenantId,
             page: params.page ?? 0,
-            size: params.size ?? 20,
+            size: params.size ?? 10,
           },
         }
       );
@@ -70,7 +70,7 @@ export const fetchMatches = createAsyncThunk(
 
 export const fetchMatchesAboveThreshold = createAsyncThunk(
   'match/fetchAboveThreshold',
-  async (params: { cvId: string; minScore: number }, { getState, rejectWithValue }) => {
+  async (params: { cvId: string; minScore: number; page?: number; size?: number }, { getState, rejectWithValue }) => {
     try {
       const state = getState() as RootState;
       const tenantId = state.tenant.currentTenant?.id;
@@ -78,12 +78,14 @@ export const fetchMatchesAboveThreshold = createAsyncThunk(
         return rejectWithValue('No tenant selected');
       }
       
-      const response = await apiClient.get<ApiResponse<MatchResultResponse[]>>(
+      const response = await apiClient.get<ApiResponse<Page<MatchResultResponse>>>(
         `/v1/matches/cv/${params.cvId}/above-threshold`,
         {
           params: {
             tenantId,
             minScore: params.minScore,
+            page: params.page ?? 0,
+            size: params.size ?? 10,
           },
         }
       );
@@ -164,11 +166,12 @@ const matchSlice = createSlice({
       })
       .addCase(fetchMatchesAboveThreshold.fulfilled, (state, action) => {
         state.loading = false;
-        state.matches = action.payload;
+        state.matches = action.payload.content;
         state.pagination = {
-          ...state.pagination,
-          totalElements: action.payload.length,
-          totalPages: 1,
+          page: action.payload.number,
+          size: action.payload.size,
+          totalElements: action.payload.totalElements,
+          totalPages: action.payload.totalPages,
         };
       })
       .addCase(fetchMatchesAboveThreshold.rejected, (state, action) => {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { fetchMatches, fetchMatchesAboveThreshold } from '@/store/slices/matchSlice';
@@ -26,6 +26,8 @@ import {
   Square,
   Send,
   CheckCircle2,
+  Check,
+  Clock,
 } from 'lucide-react';
 import {
   ChevronLeft,
@@ -33,6 +35,14 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
+import type { MatchResultResponse } from '@/types';
+
+type EmailStatusFilter = 'all' | 'emailed' | 'notEmailed';
+
+// Helper function to check if a match has been emailed
+const isEmailed = (match: MatchResultResponse): boolean => {
+  return !!match.isEmailed;
+};
 
 export const MatchesPage: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -45,6 +55,7 @@ export const MatchesPage: React.FC = () => {
   const [selectedCvId, setSelectedCvId] = useState<string>(searchParams.get('cvId') || '');
   const [searchTerm, setSearchTerm] = useState('');
   const [minScore, setMinScore] = useState<string>('0');
+  const [emailStatusFilter, setEmailStatusFilter] = useState<EmailStatusFilter>('all');
 
   // Phase 2: Selection & Generation State
   const [selectedMatchIds, setSelectedMatchIds] = useState<Set<string>>(new Set());
@@ -83,18 +94,29 @@ export const MatchesPage: React.FC = () => {
       label: cv.originalFilename,
     }));
 
-  const filteredMatches = matches.filter((match) => {
-    if (!searchTerm) return true;
-    const search = searchTerm.toLowerCase();
-    return (
-      match.professor.firstName.toLowerCase().includes(search) ||
-      match.professor.lastName.toLowerCase().includes(search) ||
-      match.professor.email.toLowerCase().includes(search) ||
-      match.professor.universityName.toLowerCase().includes(search) ||
-      match.professor.department?.toLowerCase().includes(search) ||
-      match.matchedKeywords.toLowerCase().includes(search)
-    );
-  });
+  const filteredMatches = useMemo(() => {
+    return matches.filter((match) => {
+      // Apply email status filter
+      if (emailStatusFilter === 'emailed' && !isEmailed(match)) return false;
+      if (emailStatusFilter === 'notEmailed' && isEmailed(match)) return false;
+
+      // Apply search filter
+      if (!searchTerm) return true;
+      const search = searchTerm.toLowerCase();
+      return (
+        match.professor.firstName.toLowerCase().includes(search) ||
+        match.professor.lastName.toLowerCase().includes(search) ||
+        match.professor.email.toLowerCase().includes(search) ||
+        match.professor.universityName.toLowerCase().includes(search) ||
+        match.professor.department?.toLowerCase().includes(search) ||
+        match.matchedKeywords.toLowerCase().includes(search)
+      );
+    });
+  }, [matches, emailStatusFilter, searchTerm]);
+
+  // Compute counts for filter tabs
+  const emailedCount = useMemo(() => matches.filter(isEmailed).length, [matches]);
+  const notEmailedCount = useMemo(() => matches.filter(m => !isEmailed(m)).length, [matches]);
 
   const getScoreColor = (score: number) => {
     if (score >= 0.7) return 'text-green-600 bg-green-100';
@@ -103,23 +125,38 @@ export const MatchesPage: React.FC = () => {
   };
 
   // Selection Handlers
-  const toggleSelection = (id: string) => {
+  const toggleSelection = (match: MatchResultResponse) => {
+    // Prevent selecting emailed professors
+    if (isEmailed(match)) return;
+    
     const newSelection = new Set(selectedMatchIds);
-    if (newSelection.has(id)) {
-      newSelection.delete(id);
+    if (newSelection.has(match.id)) {
+      newSelection.delete(match.id);
     } else {
-      newSelection.add(id);
+      newSelection.add(match.id);
     }
     setSelectedMatchIds(newSelection);
   };
 
   const handleSelectAll = () => {
-    const allIds = new Set(filteredMatches.map(m => m.id));
-    setSelectedMatchIds(allIds);
+    // Only select non-emailed professors
+    const selectableIds = new Set(
+      filteredMatches.filter(m => !isEmailed(m)).map(m => m.id)
+    );
+    setSelectedMatchIds(selectableIds);
   };
 
   const handleDeselectAll = () => {
     setSelectedMatchIds(new Set());
+  };
+
+  const handlePageChange = (newPage: number) => {
+    const score = parseFloat(minScore);
+    if (score > 0) {
+      dispatch(fetchMatchesAboveThreshold({ cvId: selectedCvId, minScore: score, page: newPage }));
+    } else {
+      dispatch(fetchMatches({ cvId: selectedCvId, page: newPage }));
+    }
   };
 
   // Generation Logic
@@ -156,7 +193,7 @@ export const MatchesPage: React.FC = () => {
 
   // Polling Effect
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
     if (showProgressModal && currentCampaignId && !generationComplete) {
       interval = setInterval(async () => {
         const result = await dispatch(fetchCampaignLogs({ campaignId: currentCampaignId, page: 0, size: 1000 }));
@@ -243,6 +280,47 @@ export const MatchesPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Email Status Filter Tabs */}
+          {matches.length > 0 && (
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setEmailStatusFilter('all')}
+                className={clsx(
+                  'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+                  emailStatusFilter === 'all'
+                    ? 'bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300'
+                    : 'text-gray-600 hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-slate-800'
+                )}
+              >
+                All ({matches.length})
+              </button>
+              <button
+                onClick={() => setEmailStatusFilter('emailed')}
+                className={clsx(
+                  'px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5',
+                  emailStatusFilter === 'emailed'
+                    ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                    : 'text-gray-600 hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-slate-800'
+                )}
+              >
+                <Check className="w-3.5 h-3.5" />
+                Emailed ({emailedCount})
+              </button>
+              <button
+                onClick={() => setEmailStatusFilter('notEmailed')}
+                className={clsx(
+                  'px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5',
+                  emailStatusFilter === 'notEmailed'
+                    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+                    : 'text-gray-600 hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-slate-800'
+                )}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                Not Emailed ({notEmailedCount})
+              </button>
+            </div>
+          )}
+
           {/* Selection Controls */}
           {filteredMatches.length > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-gray-100 dark:border-slate-800">
@@ -311,31 +389,40 @@ export const MatchesPage: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {filteredMatches.map((match) => {
               const isSelected = selectedMatchIds.has(match.id);
+              const matchIsEmailed = isEmailed(match);
               return (
                 <Card
                   key={match.id}
                   className={clsx(
                     "flex flex-col transition-colors border-2",
-                    isSelected ? "border-primary-500 bg-primary-50/10" : "border-transparent"
+                    matchIsEmailed && "opacity-60",
+                    isSelected ? "border-primary-500 bg-primary-50/10" : "border-transparent",
+                    !matchIsEmailed && "cursor-pointer"
                   )}
-                  onClick={() => toggleSelection(match.id)} // Allow clicking card to select? Maybe just checkbox to avoid accidental clicks
+                  onClick={() => toggleSelection(match)}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-3 gap-3">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                      {/* Checkbox */}
-                      <div
-                        className="cursor-pointer text-gray-400 hover:text-primary-600"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleSelection(match.id);
-                        }}
-                      >
-                        {isSelected ? (
-                          <CheckSquare className="w-5 h-5 text-primary-600" />
-                        ) : (
-                          <Square className="w-5 h-5" />
-                        )}
-                      </div>
+                      {/* Checkbox - only show for non-emailed */}
+                      {!matchIsEmailed ? (
+                        <div
+                          className="cursor-pointer text-gray-400 hover:text-primary-600"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSelection(match);
+                          }}
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="w-5 h-5 text-primary-600" />
+                          ) : (
+                            <Square className="w-5 h-5" />
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-green-500">
+                          <Check className="w-5 h-5" />
+                        </div>
+                      )}
 
                       <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
                         <span className="text-primary-600 font-medium">
@@ -354,13 +441,22 @@ export const MatchesPage: React.FC = () => {
                       </div>
                     </div>
 
-                    <div
-                      className={clsx(
-                        'px-3 py-1 rounded-full text-sm font-bold self-start sm:self-auto',
-                        getScoreColor(match.matchScore)
+                    <div className="flex items-center gap-2 self-start sm:self-auto">
+                      {/* Email status badge */}
+                      {matchIsEmailed && (
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 flex items-center gap-1">
+                          <Check className="w-3 h-3" />
+                          Emailed
+                        </span>
                       )}
-                    >
-                      {(match.matchScore * 100).toFixed(0)}%
+                      <div
+                        className={clsx(
+                          'px-3 py-1 rounded-full text-sm font-bold',
+                          getScoreColor(match.matchScore)
+                        )}
+                      >
+                        {(match.matchScore * 100).toFixed(0)}%
+                      </div>
                     </div>
                   </div>
 
@@ -414,9 +510,7 @@ export const MatchesPage: React.FC = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    dispatch(fetchMatches({ cvId: selectedCvId, page: pagination.page - 1 }));
-                  }}
+                  onClick={() => handlePageChange(pagination.page - 1)}
                   disabled={pagination.page === 0 || loading}
                   icon={<ChevronLeft className="w-4 h-4" />}
                 >
@@ -425,9 +519,7 @@ export const MatchesPage: React.FC = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    dispatch(fetchMatches({ cvId: selectedCvId, page: pagination.page + 1 }));
-                  }}
+                  onClick={() => handlePageChange(pagination.page + 1)}
                   disabled={pagination.page >= pagination.totalPages - 1 || loading}
                 >
                   Next

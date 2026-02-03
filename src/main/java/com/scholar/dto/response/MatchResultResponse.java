@@ -21,6 +21,7 @@ public class MatchResultResponse {
     private Integer totalCvKeywords;
     private Integer totalProfessorKeywords;
     private Integer totalMatchedKeywords;
+    private Boolean isEmailed;
     private List<EmailOptionResponse> emailOptions;
 
     @Data

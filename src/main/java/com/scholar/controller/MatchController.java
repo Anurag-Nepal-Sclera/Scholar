@@ -54,14 +54,15 @@ public class MatchController {
 
     @GetMapping("/cv/{cvId}/above-threshold")
     @Operation(summary = "Get matches above threshold", description = "Retrieve matches with score above minimum threshold")
-    public ResponseEntity<ApiResponse<List<MatchResultResponse>>> getMatchesAboveThreshold(
+    public ResponseEntity<ApiResponse<Page<MatchResultResponse>>> getMatchesAboveThreshold(
         @PathVariable UUID cvId,
         @RequestParam UUID tenantId,
-        @RequestParam BigDecimal minScore
+        @RequestParam BigDecimal minScore,
+        @Parameter(hidden = true) Pageable pageable
     ) {
         try {
             securityUtils.validateTenantOwnership(tenantId);
-            List<MatchResultResponse> response = matchingService.getMatchResultsAboveThresholdResponse(cvId, tenantId, minScore);
+            Page<MatchResultResponse> response = matchingService.getMatchResultsAboveThresholdResponse(cvId, tenantId, minScore, pageable);
             return ResponseEntity.ok(ApiResponse.success(response));
         } catch (Exception e) {
             log.error("Failed to get matches", e);

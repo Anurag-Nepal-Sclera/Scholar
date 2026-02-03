@@ -34,6 +34,16 @@ public interface MatchResultRepository extends JpaRepository<MatchResult, UUID> 
            "JOIN FETCH p.university u " +
            "WHERE m.tenant.id = :tenantId AND m.cv.id = :cvId AND m.matchScore >= :minScore " +
            "ORDER BY m.matchScore DESC")
+    Page<MatchResult> findByCvIdAndTenantIdAndMinScorePaginated(@Param("cvId") UUID cvId, 
+                                                                @Param("tenantId") UUID tenantId, 
+                                                                @Param("minScore") BigDecimal minScore,
+                                                                Pageable pageable);
+
+    @Query("SELECT m FROM MatchResult m " +
+           "JOIN FETCH m.professor p " +
+           "JOIN FETCH p.university u " +
+           "WHERE m.tenant.id = :tenantId AND m.cv.id = :cvId AND m.matchScore >= :minScore " +
+           "ORDER BY m.matchScore DESC")
     List<MatchResult> findByCvIdAndTenantIdAndMinScore(@Param("cvId") UUID cvId, 
                                                         @Param("tenantId") UUID tenantId, 
                                                         @Param("minScore") BigDecimal minScore);

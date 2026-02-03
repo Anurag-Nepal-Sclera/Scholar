@@ -30,8 +30,6 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError<{ message?: string; error?: string }>) => {
-    const message = error.response?.data?.message || error.response?.data?.error || error.message;
-    
     if (error.response?.status === 401) {
       store.dispatch(logout());
       toast.error('Session expired. Please login again.');
